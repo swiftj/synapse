@@ -17,13 +17,13 @@ Synapse is a lightweight, local-first, Git-backed issue tracker designed to serv
 ## Installation
 
 ```bash
-go install github.com/johnswift/synapse/cmd/synapse@latest
+go install github.com/swiftj/synapse/cmd/synapse@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/johnswift/synapse.git
+git clone https://github.com/swiftj/synapse.git
 cd synapse
 go build -o synapse ./cmd/synapse/
 ```
