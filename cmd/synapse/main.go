@@ -17,7 +17,7 @@ import (
 	"github.com/swiftj/synapse/pkg/types"
 )
 
-const version = "0.2.2"
+const version = "0.2.3"
 
 func main() {
 	if len(os.Args) < 2 {
