@@ -34,7 +34,7 @@ go build -o synapse ./cmd/synapse/
 # Initialize in your project
 synapse init
 
-# Add tasks
+# Manually add tasks
 synapse add "Design API endpoints"
 synapse add "Implement handlers" --blocks 1
 synapse add "Write tests" --blocks 2 --assignee @qa
@@ -48,6 +48,9 @@ synapse done 1
 
 # Check what's ready now
 synapse ready  # Task 2 is now unblocked!
+
+# Optionally instruct Claude Code to use Synapse (CLAUDE.md or AGENTS.md)
+echo "Use 'synapse' for task tracking" >> CLAUDE.md
 ```
 
 ## Commands

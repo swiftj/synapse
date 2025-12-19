@@ -30,7 +30,7 @@ func main() {
 
 	switch cmd {
 	case "init":
-		cmdInit()
+		cmdInit(args)
 	case "add":
 		cmdAdd(args)
 	case "list", "ls":
@@ -66,6 +66,7 @@ Usage:
 
 Commands:
   init              Initialize .synapse directory in current project
+      --git         Also stage memory.jsonl for commit
   add <title>       Create a new synapse task
       --blocks N    Block on synapse N (can repeat)
       --parent N    Set parent synapse ID
@@ -109,15 +110,43 @@ func saveStore(store *storage.JSONLStore) {
 	}
 }
 
-func cmdInit() {
+func cmdInit(args []string) {
+	// Parse --git flag
+	stageMemory := false
+	for _, arg := range args {
+		if arg == "--git" {
+			stageMemory = true
+		}
+	}
+
 	store := storage.NewJSONLStore(storage.DefaultDir)
-	if err := store.Init(); err != nil {
+	result, err := store.InitWithOptions(stageMemory)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
+
 	fmt.Println("Initialized .synapse directory")
-	fmt.Println("  - memory.jsonl created (Git track this)")
-	fmt.Println("  - Add .synapse/index.db to .gitignore")
+	if result.MemoryCreated {
+		fmt.Println("  ✓ Created memory.jsonl")
+	} else {
+		fmt.Println("  - memory.jsonl already exists")
+	}
+
+	if result.GitRepoDetected {
+		if result.GitignoreUpdated {
+			fmt.Println("  ✓ Added .synapse/index.db to .gitignore")
+		} else {
+			fmt.Println("  - .synapse/index.db already in .gitignore")
+		}
+		if result.MemoryStaged {
+			fmt.Println("  ✓ Staged .synapse/memory.jsonl for commit")
+		} else if stageMemory {
+			fmt.Println("  - Could not stage memory.jsonl")
+		}
+	} else {
+		fmt.Println("  - Not a Git repository (skipping Git integration)")
+	}
 }
 
 func cmdAdd(args []string) {
