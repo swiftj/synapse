@@ -10,7 +10,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/johnswift/synapse/pkg/types"
+	"github.com/swiftj/synapse/pkg/types"
 )
 
 const (

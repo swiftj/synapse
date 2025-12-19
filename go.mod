@@ -1,4 +1,4 @@
-module github.com/johnswift/synapse
+module github.com/swiftj/synapse
 
 go 1.25.5
 

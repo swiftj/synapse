@@ -10,7 +10,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/johnswift/synapse/pkg/types"
+	"github.com/swiftj/synapse/pkg/types"
 )
 
 const (

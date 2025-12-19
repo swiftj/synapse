@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/johnswift/synapse/pkg/types"
+	"github.com/swiftj/synapse/pkg/types"
 )
 
 func setupTestCache(t *testing.T) (*SQLiteCache, func()) {

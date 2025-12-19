@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/johnswift/synapse/internal/storage"
-	"github.com/johnswift/synapse/pkg/types"
+	"github.com/swiftj/synapse/internal/storage"
+	"github.com/swiftj/synapse/pkg/types"
 )
 
 func main() {
