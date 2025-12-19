@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synapse DAG Visualization</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            padding: 20px;
+        }
+
+        header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            border: 1px solid #ccc;
+        }
+
+        .viz-container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+
+        #mermaid-diagram {
+            display: flex;
+            justify-content: center;
+            min-height: 400px;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+
+        .status-open { background: #e3f2fd; color: #1565c0; }
+        .status-in-progress { background: #fff9c4; color: #f57f17; }
+        .status-blocked { background: #f5f5f5; color: #616161; }
+        .status-review { background: #e1f5fe; color: #0277bd; }
+        .status-done { background: #c8e6c9; color: #2e7d32; }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #999;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Synapse DAG Visualization</h1>
+        <p class="subtitle">Task dependency graph - auto-refreshes every 5 seconds</p>
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: white;"></div>
+                <span>Open</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #FFFFE0;"></div>
+                <span>In Progress</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #D3D3D3;"></div>
+                <span>Blocked</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #87CEEB;"></div>
+                <span>Review</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #90EE90;"></div>
+                <span>Done</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="viz-container">
+        <div id="mermaid-diagram" class="loading">Loading graph...</div>
+    </div>
+
+    <footer>
+        Synapse Agent Memory System
+    </footer>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'default',
+            flowchart: {
+                curve: 'basis',
+                padding: 20
+            }
+        });
+
+        async function fetchAndRender() {
+            try {
+                const response = await fetch('/api/synapses');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const synapses = await response.json();
+                const mermaidCode = generateMermaid(synapses);
+
+                const container = document.getElementById('mermaid-diagram');
+                container.innerHTML = '';
+                container.classList.remove('loading');
+
+                const { svg } = await mermaid.render('graph', mermaidCode);
+                container.innerHTML = svg;
+            } catch (error) {
+                console.error('Error rendering graph:', error);
+                document.getElementById('mermaid-diagram').innerHTML =
+                    `<div class="error">Error loading graph: ${error.message}</div>`;
+            }
+        }
+
+        function truncateTitle(title, maxLen = 40) {
+            return title.length > maxLen ? title.substring(0, maxLen) + '...' : title;
+        }
+
+        function escapeForMermaid(text) {
+            return text
+                .replace(/"/g, '#quot;')
+                .replace(/\[/g, '#91;')
+                .replace(/\]/g, '#93;')
+                .replace(/\(/g, '#40;')
+                .replace(/\)/g, '#41;');
+        }
+
+        function generateMermaid(synapses) {
+            if (!synapses || synapses.length === 0) {
+                return 'graph TD\n    empty[No tasks yet]';
+            }
+
+            let mermaid = 'graph TD\n';
+            const synMap = new Map(synapses.map(s => [s.id, s]));
+
+            // Create nodes
+            synapses.forEach(syn => {
+                const label = escapeForMermaid(`#${syn.id}: ${truncateTitle(syn.title)}`);
+                mermaid += `    ${syn.id}["${label}"]\n`;
+            });
+
+            mermaid += '\n';
+
+            // Create edges for BlockedBy relationships
+            synapses.forEach(syn => {
+                if (syn.blocked_by && syn.blocked_by.length > 0) {
+                    syn.blocked_by.forEach(blockerId => {
+                        if (synMap.has(blockerId)) {
+                            mermaid += `    ${blockerId} --> ${syn.id}\n`;
+                        }
+                    });
+                }
+            });
+
+            // Create edges for ParentID relationships (dotted style)
+            synapses.forEach(syn => {
+                if (syn.parent_id && syn.parent_id > 0 && synMap.has(syn.parent_id)) {
+                    mermaid += `    ${syn.parent_id} -.-> ${syn.id}\n`;
+                }
+            });
+
+            mermaid += '\n';
+
+            // Style nodes by status
+            const statusColors = {
+                'open': '#FFFFFF',
+                'in-progress': '#FFFFE0',
+                'blocked': '#D3D3D3',
+                'review': '#87CEEB',
+                'done': '#90EE90'
+            };
+
+            synapses.forEach(syn => {
+                const color = statusColors[syn.status] || '#FFFFFF';
+                mermaid += `    style ${syn.id} fill:${color}\n`;
+            });
+
+            return mermaid;
+        }
+
+        // Initial render
+        fetchAndRender();
+
+        // Auto-refresh every 5 seconds
+        setInterval(fetchAndRender, 5000);
+    </script>
+</body>
+</html>
