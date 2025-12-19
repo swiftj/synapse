@@ -17,7 +17,7 @@ import (
 func main() {
 	// Initialize storage
 	store := storage.NewJSONLStore(".synapse")
-	if err := store.Init(); err != nil {
+	if _, err := store.Init(); err != nil {
 		log.Fatalf("Failed to initialize storage: %v", err)
 	}
 

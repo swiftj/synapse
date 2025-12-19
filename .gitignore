@@ -1,6 +1,6 @@
 # Binaries
-synapse
-viz_server
+/synapse
+/viz_server
 *.exe
 
 # SQLite cache (rebuild from JSONL)
