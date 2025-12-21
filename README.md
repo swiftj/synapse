@@ -64,6 +64,7 @@ echo "Use 'synapse' for task tracking" >> CLAUDE.md
 | `get <id>` | Get details of a specific task |
 | `claim <id>` | Mark task as in-progress |
 | `done <id>` | Mark task as done |
+| `all-done` | Mark all tasks as done (cleanup/reset command) |
 | `serve` | Start MCP server (JSON-RPC over stdio) |
 | `view` | Start visualization server (`--port N`, default 8080) |
 
