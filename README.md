@@ -264,6 +264,81 @@ Get tasks modified within a time window for session context:
 
 This is useful for agents resuming work to understand recent activity.
 
+## Claude Code Integration
+
+To get Claude Code to automatically use Synapse MCP to its fullest, add the following to your project's `CLAUDE.md` file:
+
+<details>
+<summary>📋 Click to expand recommended CLAUDE.md content</summary>
+
+```markdown
+# Task Management with Synapse
+
+This project uses Synapse for persistent task tracking and agent coordination.
+
+## Required Behavior
+
+**Always use Synapse MCP tools for task management:**
+- Before starting work: Check `get_next_task` or `list_tasks` to understand current priorities
+- When discovering issues: Use `create_task` to log them immediately (prevents lost work)
+- When starting a task: Use `claim_task` with your agent ID to prevent collisions
+- When completing work: Use `complete_task_as` to record completion
+- For cross-session context: Use breadcrumbs (`set_breadcrumb`, `get_breadcrumb`)
+
+## Task Workflow
+
+1. **Session Start:**
+   - Call `list_tasks` with status "in-progress" to see active work
+   - Call `get_context_window` with minutes=60 to see recent activity
+   - Check `my_tasks` if resuming previous work
+
+2. **During Work:**
+   - Log discovered bugs/issues immediately with `create_task` (use `discovered_from` to link to current task)
+   - Add observations with `update_task` to append notes
+   - Use `set_breadcrumb` for important context that should persist across sessions
+
+3. **Task Completion:**
+   - Use `complete_task_as` to mark done and record your agent ID
+   - Check `get_next_task` for the next priority item
+
+## Task Creation Guidelines
+
+When creating tasks, always include:
+- Clear, actionable title
+- `priority` (1-5, higher = more important)
+- `labels` for categorization (e.g., "bug", "feature", "refactor")
+- `blocked_by` if dependent on other tasks
+- `assignee` if role-specific (@qa, @coder, @architect)
+
+Example:
+\`\`\`
+create_task({
+  title: "Fix authentication token expiry",
+  priority: 3,
+  labels: ["bug", "security"],
+  blocked_by: [5],
+  assignee: "@coder"
+})
+\`\`\`
+
+## Breadcrumb Usage
+
+Use breadcrumbs to persist important context:
+- `arch.*` - Architectural decisions (e.g., "arch.auth" = "JWT with refresh tokens")
+- `blocked.*` - Blocking reasons (e.g., "blocked.task.5" = "Waiting for API spec")
+- `context.*` - Session context (e.g., "context.current_focus" = "refactoring auth module")
+- `decision.*` - Key decisions made (e.g., "decision.database" = "PostgreSQL for ACID compliance")
+
+## Multi-Agent Coordination
+
+- Claims timeout after 30 minutes automatically
+- Always claim before starting work on a task
+- Release claims if switching to different work
+- Check `my_tasks` to see what you currently own
+```
+
+</details>
+
 ## Development
 
 ```bash
