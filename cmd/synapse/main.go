@@ -66,7 +66,7 @@ func printUsage() {
 	fmt.Println(`Synapse - The shared nervous system for Vibe Coders and their Agents.
 
 Usage:
-  syn <command> [arguments]
+  synapse <command> [arguments]
 
 Commands:
   init              Initialize .synapse directory in current project
@@ -99,11 +99,11 @@ Commands:
   help              Print this help message
 
 Examples:
-  syn init
-  syn add "Fix login bug" --blocks 4 --parent 2
-  syn ready --json
-  syn claim 5
-  syn done 5`)
+  synapse init
+  synapse add "Fix login bug" --blocks 4 --parent 2
+  synapse ready --json
+  synapse claim 5
+  synapse done 5`)
 }
 
 func getStore() *storage.JSONLStore {
@@ -164,7 +164,7 @@ func cmdInit(args []string) {
 func cmdAdd(args []string) {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "error: title required")
-		fmt.Fprintln(os.Stderr, "usage: syn add <title> [--blocks N] [--parent N] [--assignee X]")
+		fmt.Fprintln(os.Stderr, "usage: synapse add <title> [--blocks N] [--parent N] [--assignee X]")
 		os.Exit(1)
 	}
 
@@ -522,7 +522,7 @@ func cmdBreadcrumb(args []string) {
 func cmdBreadcrumbSet(args []string) {
 	if len(args) < 2 {
 		fmt.Fprintln(os.Stderr, "error: key and value required")
-		fmt.Fprintln(os.Stderr, "usage: syn breadcrumb set <key> <value> [--task-id N]")
+		fmt.Fprintln(os.Stderr, "usage: synapse breadcrumb set <key> <value> [--task-id N]")
 		os.Exit(1)
 	}
 
@@ -581,7 +581,7 @@ func cmdBreadcrumbSet(args []string) {
 func cmdBreadcrumbGet(args []string) {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "error: key required")
-		fmt.Fprintln(os.Stderr, "usage: syn breadcrumb get <key>")
+		fmt.Fprintln(os.Stderr, "usage: synapse breadcrumb get <key>")
 		os.Exit(1)
 	}
 
@@ -647,7 +647,7 @@ func cmdBreadcrumbList(args []string) {
 func cmdBreadcrumbDelete(args []string) {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "error: key required")
-		fmt.Fprintln(os.Stderr, "usage: syn breadcrumb delete <key>")
+		fmt.Fprintln(os.Stderr, "usage: synapse breadcrumb delete <key>")
 		os.Exit(1)
 	}
 
