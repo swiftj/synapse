@@ -28,18 +28,27 @@ func (s Status) IsValid() bool {
 	return false
 }
 
+// DefaultClaimTimeout is the default duration after which a claim expires.
+const DefaultClaimTimeout = 30 * time.Minute
+
 // Synapse represents an atomic memory unit / task in the system.
 type Synapse struct {
-	ID             int       `json:"id"`
-	Title          string    `json:"title"`
-	Description    string    `json:"description,omitempty"`
-	Status         Status    `json:"status"`
-	BlockedBy      []int     `json:"blocked_by,omitempty"`
-	ParentID       int       `json:"parent_id,omitempty"`
-	Assignee       string    `json:"assignee,omitempty"`
-	DiscoveredFrom string    `json:"discovered_from,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             int        `json:"id"`
+	Title          string     `json:"title"`
+	Description    string     `json:"description,omitempty"`
+	Status         Status     `json:"status"`
+	Priority       int        `json:"priority,omitempty"` // Higher number = higher priority
+	BlockedBy      []int      `json:"blocked_by,omitempty"`
+	ParentID       int        `json:"parent_id,omitempty"`
+	Assignee       string     `json:"assignee,omitempty"`
+	DiscoveredFrom string     `json:"discovered_from,omitempty"`
+	Labels         []string   `json:"labels,omitempty"`
+	Notes          []string   `json:"notes,omitempty"`
+	ClaimedBy      string     `json:"claimed_by,omitempty"`  // Agent ID that claimed this task
+	ClaimedAt      *time.Time `json:"claimed_at,omitempty"`  // When the task was claimed
+	CompletedBy    string     `json:"completed_by,omitempty"` // Agent ID that completed this task
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // NewSynapse creates a new Synapse with the given title and default values.
@@ -81,9 +90,62 @@ func (s *Synapse) MarkInProgress() {
 	s.UpdatedAt = time.Now().UTC()
 }
 
+// Claim attempts to claim the task for an agent. Returns true if successful.
+// A claim can fail if:
+// - The task is already claimed by another agent and the claim hasn't expired
+// - The task is not in a claimable state (already done)
+func (s *Synapse) Claim(agentID string, timeout time.Duration) bool {
+	now := time.Now().UTC()
+
+	// Can't claim completed tasks
+	if s.Status == StatusDone {
+		return false
+	}
+
+	// Check if already claimed by another agent with an active claim
+	if s.ClaimedBy != "" && s.ClaimedBy != agentID && s.ClaimedAt != nil {
+		// Check if claim has expired
+		if now.Sub(*s.ClaimedAt) < timeout {
+			return false // Claim still active
+		}
+	}
+
+	// Claim the task
+	s.ClaimedBy = agentID
+	s.ClaimedAt = &now
+	s.Status = StatusInProgress
+	s.UpdatedAt = now
+	return true
+}
+
+// ReleaseClaim releases the claim on this task.
+func (s *Synapse) ReleaseClaim() {
+	s.ClaimedBy = ""
+	s.ClaimedAt = nil
+	if s.Status == StatusInProgress {
+		s.Status = StatusOpen
+	}
+	s.UpdatedAt = time.Now().UTC()
+}
+
+// IsClaimExpired checks if the current claim has expired.
+func (s *Synapse) IsClaimExpired(timeout time.Duration) bool {
+	if s.ClaimedAt == nil {
+		return true
+	}
+	return time.Now().UTC().Sub(*s.ClaimedAt) >= timeout
+}
+
 // MarkDone transitions the synapse to done status.
 func (s *Synapse) MarkDone() {
 	s.Status = StatusDone
+	s.UpdatedAt = time.Now().UTC()
+}
+
+// MarkDoneBy transitions the synapse to done status and records the completing agent.
+func (s *Synapse) MarkDoneBy(agentID string) {
+	s.Status = StatusDone
+	s.CompletedBy = agentID
 	s.UpdatedAt = time.Now().UTC()
 }
 
@@ -113,4 +175,10 @@ func (s *Synapse) RemoveBlocker(blockerID int) {
 			return
 		}
 	}
+}
+
+// AddNote appends a note to the task for context persistence.
+func (s *Synapse) AddNote(note string) {
+	s.Notes = append(s.Notes, note)
+	s.UpdatedAt = time.Now().UTC()
 }

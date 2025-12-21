@@ -137,6 +137,19 @@
                 <div class="legend-color" style="background: #90EE90;"></div>
                 <span>Done</span>
             </div>
+            <span style="margin-left: 16px; color: #999;">|</span>
+            <div class="legend-item">
+                <span style="font-family: monospace;">P#</span>
+                <span>Priority</span>
+            </div>
+            <div class="legend-item">
+                <span style="font-family: monospace;">@name</span>
+                <span>Claimed By</span>
+            </div>
+            <div class="legend-item">
+                <span style="font-family: monospace;">[tag]</span>
+                <span>Labels</span>
+            </div>
         </div>
     </header>
 
@@ -202,10 +215,26 @@
             let mermaid = 'graph TD\n';
             const synMap = new Map(synapses.map(s => [s.id, s]));
 
-            // Create nodes
+            // Create nodes with enhanced labels
             synapses.forEach(syn => {
-                const label = escapeForMermaid(`#${syn.id}: ${truncateTitle(syn.title)}`);
-                mermaid += `    ${syn.id}["${label}"]\n`;
+                let label = `#${syn.id}: ${truncateTitle(syn.title)}`;
+
+                // Add priority indicator
+                if (syn.priority && syn.priority > 0) {
+                    label += ` P${syn.priority}`;
+                }
+
+                // Add claimed by indicator
+                if (syn.claimed_by) {
+                    label += ` @${truncateTitle(syn.claimed_by, 10)}`;
+                }
+
+                // Add labels as badges
+                if (syn.labels && syn.labels.length > 0) {
+                    label += ` [${syn.labels.slice(0, 2).join(',')}]`;
+                }
+
+                mermaid += `    ${syn.id}["${escapeForMermaid(label)}"]\n`;
             });
 
             mermaid += '\n';

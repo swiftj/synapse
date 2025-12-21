@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/swiftj/synapse/pkg/types"
 )
@@ -286,9 +287,9 @@ func (s *JSONLStore) Ready() []*types.Synapse {
 		}
 	}
 
-	// Sort by ID for deterministic ordering
+	// Sort by priority descending (higher priority first)
 	sort.Slice(ready, func(i, j int) bool {
-		return ready[i].ID < ready[j].ID
+		return ready[i].Priority > ready[j].Priority
 	})
 
 	return ready
@@ -332,11 +333,88 @@ func (s *JSONLStore) ByAssignee(assignee string) []*types.Synapse {
 	return result
 }
 
+// ByLabel returns all synapses with the given label.
+func (s *JSONLStore) ByLabel(label string) []*types.Synapse {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var result []*types.Synapse
+	for _, syn := range s.synapses {
+		for _, l := range syn.Labels {
+			if l == label {
+				result = append(result, syn)
+				break
+			}
+		}
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].ID < result[j].ID
+	})
+
+	return result
+}
+
 // Count returns the total number of synapses.
 func (s *JSONLStore) Count() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.synapses)
+}
+
+// ModifiedSince returns all synapses modified since the given time.
+func (s *JSONLStore) ModifiedSince(since time.Time) []*types.Synapse {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var result []*types.Synapse
+	for _, syn := range s.synapses {
+		if syn.UpdatedAt.After(since) || syn.UpdatedAt.Equal(since) {
+			result = append(result, syn)
+		}
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].UpdatedAt.After(result[j].UpdatedAt)
+	})
+
+	return result
+}
+
+// ClaimedBy returns all synapses claimed by the given agent.
+func (s *JSONLStore) ClaimedBy(agentID string) []*types.Synapse {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var result []*types.Synapse
+	for _, syn := range s.synapses {
+		if syn.ClaimedBy == agentID {
+			result = append(result, syn)
+		}
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].ID < result[j].ID
+	})
+
+	return result
+}
+
+// ReleaseExpiredClaims releases claims that have exceeded the timeout.
+// Returns the number of claims released.
+func (s *JSONLStore) ReleaseExpiredClaims(timeout time.Duration) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	count := 0
+	for _, syn := range s.synapses {
+		if syn.ClaimedBy != "" && syn.IsClaimExpired(timeout) {
+			syn.ReleaseClaim()
+			count++
+		}
+	}
+
+	return count
 }
 
 // memoryPath returns the full path to the memory file.

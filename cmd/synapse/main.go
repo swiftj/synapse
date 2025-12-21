@@ -17,7 +17,7 @@ import (
 	"github.com/swiftj/synapse/pkg/types"
 )
 
-const version = "0.2.4"
+const version = "0.3.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -45,6 +45,8 @@ func main() {
 		cmdDone(args)
 	case "all-done":
 		cmdDoneAll()
+	case "breadcrumb", "bc":
+		cmdBreadcrumb(args)
 	case "serve":
 		cmdServe()
 	case "view":
@@ -83,6 +85,13 @@ Commands:
   claim <id>        Mark synapse as in-progress
   done <id>         Mark synapse as done
   all-done          Mark all tasks as done (cleanup command)
+  breadcrumb, bc    Manage breadcrumbs (persistent key-value storage)
+      set <key> <value>   Set a breadcrumb value
+          --task-id N     Link to task ID
+      get <key>           Get a breadcrumb value
+      list [prefix]       List breadcrumbs (optionally filter by prefix)
+          --json          Output as JSON
+      delete <key>        Delete a breadcrumb
   serve             Start MCP server (JSON-RPC over stdio)
   view              Start visualization web server
       --port N      Port to listen on (default: 8080)
@@ -470,9 +479,194 @@ func cmdDoneAll() {
 	fmt.Printf("Marked %d task(s) as done\n", count)
 }
 
+func getBreadcrumbStore() *storage.BreadcrumbStore {
+	store := storage.NewBreadcrumbStore(storage.DefaultDir)
+	if err := store.Load(); err != nil {
+		fmt.Fprintf(os.Stderr, "error loading breadcrumbs: %v\n", err)
+		os.Exit(1)
+	}
+	return store
+}
+
+func saveBreadcrumbStore(store *storage.BreadcrumbStore) {
+	if err := store.Save(); err != nil {
+		fmt.Fprintf(os.Stderr, "error saving breadcrumbs: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func cmdBreadcrumb(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "error: subcommand required (set, get, list, delete)")
+		os.Exit(1)
+	}
+
+	subcmd := args[0]
+	subargs := args[1:]
+
+	switch subcmd {
+	case "set":
+		cmdBreadcrumbSet(subargs)
+	case "get":
+		cmdBreadcrumbGet(subargs)
+	case "list", "ls":
+		cmdBreadcrumbList(subargs)
+	case "delete", "rm":
+		cmdBreadcrumbDelete(subargs)
+	default:
+		fmt.Fprintf(os.Stderr, "error: unknown breadcrumb subcommand: %s\n", subcmd)
+		os.Exit(1)
+	}
+}
+
+func cmdBreadcrumbSet(args []string) {
+	if len(args) < 2 {
+		fmt.Fprintln(os.Stderr, "error: key and value required")
+		fmt.Fprintln(os.Stderr, "usage: syn breadcrumb set <key> <value> [--task-id N]")
+		os.Exit(1)
+	}
+
+	key := args[0]
+	var value string
+	var taskID int
+
+	// Parse remaining arguments
+	i := 1
+	for i < len(args) {
+		arg := args[i]
+		if arg == "--task-id" && i+1 < len(args) {
+			i++
+			id, err := strconv.Atoi(args[i])
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error: invalid task ID: %s\n", args[i])
+				os.Exit(1)
+			}
+			taskID = id
+		} else if !strings.HasPrefix(arg, "--") {
+			if value == "" {
+				value = arg
+			} else {
+				value = value + " " + arg
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "error: unknown flag: %s\n", arg)
+			os.Exit(1)
+		}
+		i++
+	}
+
+	if value == "" {
+		fmt.Fprintln(os.Stderr, "error: value required")
+		os.Exit(1)
+	}
+
+	store := getBreadcrumbStore()
+	created, err := store.Set(key, value, taskID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+	saveBreadcrumbStore(store)
+
+	if created {
+		fmt.Printf("Created breadcrumb: %s = %s\n", key, value)
+	} else {
+		fmt.Printf("Updated breadcrumb: %s = %s\n", key, value)
+	}
+	if taskID > 0 {
+		fmt.Printf("  Linked to task #%d\n", taskID)
+	}
+}
+
+func cmdBreadcrumbGet(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "error: key required")
+		fmt.Fprintln(os.Stderr, "usage: syn breadcrumb get <key>")
+		os.Exit(1)
+	}
+
+	key := args[0]
+	store := getBreadcrumbStore()
+
+	b, found := store.Get(key)
+	if !found {
+		fmt.Fprintf(os.Stderr, "breadcrumb not found: %s\n", key)
+		os.Exit(1)
+	}
+
+	// Output just the value for easy scripting
+	fmt.Println(b.Value)
+}
+
+func cmdBreadcrumbList(args []string) {
+	var prefix string
+	var asJSON bool
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--json" {
+			asJSON = true
+		} else if !strings.HasPrefix(arg, "--") {
+			prefix = arg
+		}
+	}
+
+	store := getBreadcrumbStore()
+	breadcrumbs := store.List(prefix)
+
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		enc.Encode(breadcrumbs)
+		return
+	}
+
+	if len(breadcrumbs) == 0 {
+		if prefix != "" {
+			fmt.Printf("No breadcrumbs found with prefix: %s\n", prefix)
+		} else {
+			fmt.Println("No breadcrumbs found")
+		}
+		return
+	}
+
+	fmt.Printf("Breadcrumbs (%d):\n\n", len(breadcrumbs))
+	for _, b := range breadcrumbs {
+		// Truncate long values for display
+		value := b.Value
+		if len(value) > 50 {
+			value = value[:47] + "..."
+		}
+		fmt.Printf("  %s = %s\n", b.Key, value)
+		if b.TaskID > 0 {
+			fmt.Printf("    Task: #%d\n", b.TaskID)
+		}
+	}
+}
+
+func cmdBreadcrumbDelete(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "error: key required")
+		fmt.Fprintln(os.Stderr, "usage: syn breadcrumb delete <key>")
+		os.Exit(1)
+	}
+
+	key := args[0]
+	store := getBreadcrumbStore()
+
+	if !store.Delete(key) {
+		fmt.Fprintf(os.Stderr, "breadcrumb not found: %s\n", key)
+		os.Exit(1)
+	}
+
+	saveBreadcrumbStore(store)
+	fmt.Printf("Deleted breadcrumb: %s\n", key)
+}
+
 func cmdServe() {
 	store := getStore()
-	server := mcp.NewServer(store)
+	bcStore := getBreadcrumbStore()
+	server := mcp.NewServer(store, bcStore)
 	if err := server.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
