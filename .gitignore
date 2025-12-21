@@ -19,3 +19,4 @@ Thumbs.db
 # Test artifacts
 coverage.out
 *.test
+.serena/

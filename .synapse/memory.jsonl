@@ -2,3 +2,24 @@
 {"id":2,"title":"Implement MCP server","status":"done","blocked_by":[1],"created_at":"2025-12-19T19:48:56.023538Z","updated_at":"2025-12-19T20:15:31.132897Z"}
 {"id":3,"title":"Add visualization","status":"done","blocked_by":[1],"assignee":"@frontend","created_at":"2025-12-19T19:48:56.026757Z","updated_at":"2025-12-19T20:15:40.518494Z"}
 {"id":4,"title":"Test end-to-end integration","status":"done","blocked_by":[2,3],"created_at":"2025-12-19T20:15:22.597051Z","updated_at":"2025-12-19T22:48:30.764461Z"}
+{"id":5,"title":"EPIC: Synapse Enhancement Project v0.3.0","status":"in-progress","created_at":"2025-12-21T16:12:39.090172Z","updated_at":"2025-12-21T16:13:04.577404Z"}
+{"id":6,"title":"Tier 1: Core Agent Memory - Notes field","status":"done","parent_id":5,"created_at":"2025-12-21T16:12:39.098619Z","updated_at":"2025-12-21T16:17:57.24586Z"}
+{"id":7,"title":"Tier 1: Core Agent Memory - Labels/Tags","status":"done","parent_id":5,"created_at":"2025-12-21T16:12:39.106489Z","updated_at":"2025-12-21T16:17:57.252517Z"}
+{"id":8,"title":"Tier 1: Core Agent Memory - Priority field","status":"done","parent_id":5,"created_at":"2025-12-21T16:12:39.113809Z","updated_at":"2025-12-21T16:17:57.258738Z"}
+{"id":9,"title":"Tier 1: Core Agent Memory - Discovery chain (DiscoveredFrom)","status":"done","parent_id":5,"created_at":"2025-12-21T16:12:39.121589Z","updated_at":"2025-12-21T16:17:57.265488Z"}
+{"id":10,"title":"Tier 1: Core Agent Memory - Breadcrumb system","status":"blocked","blocked_by":[6,7,8,9],"parent_id":5,"created_at":"2025-12-21T16:12:39.129491Z","updated_at":"2025-12-21T16:12:39.129491Z"}
+{"id":11,"title":"Tier 2: Multi-Agent - Claim locking with timeout","status":"blocked","blocked_by":[10],"parent_id":5,"created_at":"2025-12-21T16:12:39.137479Z","updated_at":"2025-12-21T16:12:39.137479Z"}
+{"id":12,"title":"Tier 2: Multi-Agent - Agent identity tracking","status":"blocked","blocked_by":[10],"parent_id":5,"created_at":"2025-12-21T16:12:39.144623Z","updated_at":"2025-12-21T16:12:39.144623Z"}
+{"id":13,"title":"Tier 2: Multi-Agent - Context window queries","status":"blocked","blocked_by":[10],"parent_id":5,"created_at":"2025-12-21T16:12:39.151436Z","updated_at":"2025-12-21T16:12:39.151436Z"}
+{"id":14,"title":"Tier 3: Workflow - Task templates","status":"blocked","blocked_by":[11,12,13],"parent_id":5,"created_at":"2025-12-21T16:12:39.158309Z","updated_at":"2025-12-21T16:12:39.158309Z"}
+{"id":15,"title":"Add MCP tools for notes operations","status":"open","parent_id":6,"assignee":"@backend","created_at":"2025-12-21T16:12:48.919984Z","updated_at":"2025-12-21T16:12:48.919984Z"}
+{"id":16,"title":"Add MCP tools for labels operations","status":"open","parent_id":7,"assignee":"@backend","created_at":"2025-12-21T16:12:48.927174Z","updated_at":"2025-12-21T16:12:48.927174Z"}
+{"id":17,"title":"Add MCP tools for priority operations","status":"open","parent_id":8,"assignee":"@backend","created_at":"2025-12-21T16:12:48.933851Z","updated_at":"2025-12-21T16:12:48.933851Z"}
+{"id":18,"title":"Add MCP tools for discovery chain","status":"open","parent_id":9,"assignee":"@backend","created_at":"2025-12-21T16:12:48.940687Z","updated_at":"2025-12-21T16:12:48.940687Z"}
+{"id":19,"title":"Design breadcrumb storage schema","status":"done","parent_id":10,"assignee":"@architect","created_at":"2025-12-21T16:12:48.94728Z","updated_at":"2025-12-21T16:17:57.271934Z"}
+{"id":20,"title":"Implement breadcrumb JSONL storage","status":"blocked","blocked_by":[19],"parent_id":10,"assignee":"@backend","created_at":"2025-12-21T16:12:48.953469Z","updated_at":"2025-12-21T16:12:48.953469Z"}
+{"id":21,"title":"Add breadcrumb MCP tools","status":"blocked","blocked_by":[20],"parent_id":10,"assignee":"@backend","created_at":"2025-12-21T16:12:48.959992Z","updated_at":"2025-12-21T16:12:48.959992Z"}
+{"id":22,"title":"Add breadcrumb CLI commands","status":"blocked","blocked_by":[20],"parent_id":10,"assignee":"@backend","created_at":"2025-12-21T16:12:48.966361Z","updated_at":"2025-12-21T16:12:48.966361Z"}
+{"id":23,"title":"Update visualization for new fields","status":"blocked","blocked_by":[6,7,8],"parent_id":5,"assignee":"@frontend","created_at":"2025-12-21T16:12:48.972987Z","updated_at":"2025-12-21T16:12:48.972987Z"}
+{"id":24,"title":"Update README documentation","status":"blocked","blocked_by":[14],"parent_id":5,"assignee":"@docs","created_at":"2025-12-21T16:12:48.979872Z","updated_at":"2025-12-21T16:12:48.979872Z"}
+{"id":25,"title":"Bump version to 0.3.0 and release","status":"blocked","blocked_by":[24],"parent_id":5,"assignee":"@release","created_at":"2025-12-21T16:12:48.986169Z","updated_at":"2025-12-21T16:12:48.986169Z"}
