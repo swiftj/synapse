@@ -43,6 +43,8 @@ func main() {
 		cmdClaim(args)
 	case "done":
 		cmdDone(args)
+	case "all-done":
+		cmdDoneAll()
 	case "serve":
 		cmdServe()
 	case "view":
@@ -80,6 +82,7 @@ Commands:
       --json        Output as JSON
   claim <id>        Mark synapse as in-progress
   done <id>         Mark synapse as done
+  all-done          Mark all tasks as done (cleanup command)
   serve             Start MCP server (JSON-RPC over stdio)
   view              Start visualization web server
       --port N      Port to listen on (default: 8080)
@@ -444,6 +447,27 @@ func statusToIcon(status types.Status) string {
 	default:
 		return "?"
 	}
+}
+
+func cmdDoneAll() {
+	store := getStore()
+	all := store.All()
+
+	count := 0
+	for _, syn := range all {
+		if syn.Status != types.StatusDone {
+			syn.MarkDone()
+			count++
+		}
+	}
+
+	if count == 0 {
+		fmt.Println("No tasks to mark as done")
+		return
+	}
+
+	saveStore(store)
+	fmt.Printf("Marked %d task(s) as done\n", count)
 }
 
 func cmdServe() {
