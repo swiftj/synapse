@@ -411,7 +411,7 @@ func cmdDone(args []string) {
 
 func printSynapse(syn *types.Synapse) {
 	statusIcon := statusToIcon(syn.Status)
-	fmt.Printf("%s #%d: %s\n", statusIcon, syn.ID, syn.Title)
+	fmt.Printf("%s [%s] #%d: %s\n", statusIcon, syn.Status, syn.ID, syn.Title)
 	if syn.Assignee != "" {
 		fmt.Printf("   Assignee: %s\n", syn.Assignee)
 	}
