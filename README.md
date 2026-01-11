@@ -2,6 +2,22 @@
 
 **The shared nervous system for Vibe Coders and their Agents.**
 
+<!-- Badges -->
+<p align="center">
+  <img src="https://img.shields.io/badge/VERSION-0.3.2-blue?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go Version">
+  <img src="https://img.shields.io/badge/-macOS-000000?style=flat-square&logo=apple&logoColor=white" alt="macOS">
+  <img src="https://img.shields.io/badge/-Linux-FCC624?style=flat-square&logo=linux&logoColor=black" alt="Linux">
+  <img src="https://img.shields.io/badge/LICENSE-MIT-green?style=flat-square" alt="License">
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/CGO-FREE-success?style=flat-square" alt="CGO Free">
+  <img src="https://img.shields.io/badge/MCP-COMPATIBLE-8A2BE2?style=flat-square" alt="MCP Compatible">
+  <img src="https://img.shields.io/badge/Claude_Code-INTEGRATED-orange?style=flat-square" alt="Claude Code">
+</p>
+
+---
+
 Synapse is a lightweight, local-first, Git-backed issue tracker designed to serve as persistent "long-term memory" for AI agents. It enables multiple AI agents to coordinate work through a shared task graph with dependency tracking.
 
 ## Features
@@ -342,6 +358,9 @@ Use breadcrumbs to persist important context:
 ## Development
 
 ```bash
+# Install git hooks (auto-version bumping)
+./scripts/install-hooks.sh
+
 # Run tests
 go test ./...
 
@@ -352,6 +371,21 @@ go build -o synapse ./cmd/synapse/
 go run ./examples/cache_demo/
 go run ./examples/viz_server/
 ```
+
+### Version Management
+
+This project uses Git hooks for automatic SemVer versioning:
+
+| Commit Type | Action | Example |
+|-------------|--------|---------|
+| Normal commit with `.go` files | Bump patch | `0.3.2` → `0.3.3` |
+| `[minor]` in commit message | Bump minor | `0.3.2` → `0.4.0` |
+| `[major]` in commit message | Bump major | `0.3.2` → `1.0.0` |
+| `[skip-version]` in commit message | No change | `0.3.2` → `0.3.2` |
+
+The hooks automatically update:
+- `cmd/synapse/main.go` (version constant)
+- `README.md` (version badge)
 
 ## License
 

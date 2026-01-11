@@ -1,0 +1,43 @@
+#!/bin/bash
+# Prepare-commit-msg hook: Handle [minor], [major], [skip-version] keywords
+#
+# This hook runs BEFORE pre-commit and checks if the commit message
+# contains version control keywords. It sets an environment marker
+# that pre-commit can read.
+#
+# Install: Run ./scripts/install-hooks.sh
+# Location: scripts/hooks/prepare-commit-msg
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+# Only process for regular commits (not merges, squashes, etc.)
+if [[ "$COMMIT_SOURCE" != "" && "$COMMIT_SOURCE" != "message" ]]; then
+    exit 0
+fi
+
+# Read the commit message if it exists
+if [[ -f "$COMMIT_MSG_FILE" ]]; then
+    COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+    # Check for skip-version
+    if echo "$COMMIT_MSG" | grep -qi '\[skip-version\]'; then
+        echo "skip" > .git/VERSION_BUMP_TYPE
+        exit 0
+    fi
+
+    # Check for major bump
+    if echo "$COMMIT_MSG" | grep -qi '\[major\]'; then
+        echo "major" > .git/VERSION_BUMP_TYPE
+        exit 0
+    fi
+
+    # Check for minor bump
+    if echo "$COMMIT_MSG" | grep -qi '\[minor\]'; then
+        echo "minor" > .git/VERSION_BUMP_TYPE
+        exit 0
+    fi
+fi
+
+# Default to patch
+echo "patch" > .git/VERSION_BUMP_TYPE
