@@ -31,6 +31,7 @@
 - `get_task` / `list_tasks` - Query task state
 - `get_next_task` - Get highest priority ready task
 - `complete_task` - Mark task done
+- `delete_task` - Delete a single task by ID or all tasks
 
 **Multi-Agent Coordination:**
 - `claim_task` - Lock task for your agent (30-min timeout)

@@ -490,6 +490,23 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 				"required": []string{"agent_id"},
 			},
 		},
+		{
+			Name:        "delete_task",
+			Description: "Delete a task by ID, or delete all tasks",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"id": map[string]interface{}{
+						"type":        "number",
+						"description": "Task ID to delete (omit to delete all when delete_all is true)",
+					},
+					"delete_all": map[string]interface{}{
+						"type":        "boolean",
+						"description": "If true, delete all tasks (id is ignored)",
+					},
+				},
+			},
+		},
 	}
 
 	s.sendResult(req.ID, toolsListResult{Tools: tools})
@@ -540,6 +557,8 @@ func (s *Server) handleToolsCall(req *jsonRPCRequest) {
 		result, err = s.getContextWindow(params.Arguments)
 	case "my_tasks":
 		result, err = s.myTasks(params.Arguments)
+	case "delete_task":
+		result, err = s.deleteTask(params.Arguments)
 	default:
 		s.sendError(req.ID, -32602, "Invalid params", fmt.Sprintf("unknown tool: %s", params.Name))
 		return
@@ -1184,6 +1203,64 @@ func (s *Server) myTasks(args map[string]interface{}) (toolCallResult, error) {
 		Content: []toolContent{{
 			Type: "text",
 			Text: string(data),
+		}},
+	}, nil
+}
+
+func (s *Server) deleteTask(args map[string]interface{}) (toolCallResult, error) {
+	// Check if delete_all is specified
+	if deleteAll, ok := args["delete_all"].(bool); ok && deleteAll {
+		all := s.store.All()
+		count := len(all)
+		if count == 0 {
+			return toolCallResult{
+				Content: []toolContent{{
+					Type: "text",
+					Text: "No tasks to delete",
+				}},
+			}, nil
+		}
+
+		if err := s.store.DeleteAll(); err != nil {
+			return toolCallResult{}, err
+		}
+
+		if err := s.store.Save(); err != nil {
+			log.Printf("Warning: failed to save after delete all: %v", err)
+		}
+
+		return toolCallResult{
+			Content: []toolContent{{
+				Type: "text",
+				Text: fmt.Sprintf("Deleted all %d task(s)", count),
+			}},
+		}, nil
+	}
+
+	// Delete single task by ID
+	id, ok := args["id"].(float64)
+	if !ok {
+		return toolCallResult{}, fmt.Errorf("id is required (or set delete_all to true)")
+	}
+
+	syn, err := s.store.Get(int(id))
+	if err != nil {
+		return toolCallResult{}, err
+	}
+
+	title := syn.Title
+	if err := s.store.Delete(int(id)); err != nil {
+		return toolCallResult{}, err
+	}
+
+	if err := s.store.Save(); err != nil {
+		log.Printf("Warning: failed to save after delete: %v", err)
+	}
+
+	return toolCallResult{
+		Content: []toolContent{{
+			Type: "text",
+			Text: fmt.Sprintf("Deleted task #%d: %s", int(id), title),
 		}},
 	}, nil
 }

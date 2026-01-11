@@ -93,6 +93,8 @@ type Synapse struct {
 | `syn ready [--json]` | List unblocked, actionable tasks |
 | `syn claim N` | Mark task as in-progress |
 | `syn done N` | Mark task as complete |
+| `syn delete N` or `syn rm N` | Delete a task by ID |
+| `syn delete --all` | Delete all tasks |
 | `syn view` | Start visualization server on :8080 |
 | `syn serve` | Start MCP server on stdio |
 

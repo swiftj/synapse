@@ -252,6 +252,16 @@ func (s *JSONLStore) Delete(id int) error {
 	return nil
 }
 
+// DeleteAll removes all synapses from the store.
+func (s *JSONLStore) DeleteAll() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.synapses = make(map[int]*types.Synapse)
+	s.nextID = 1
+	return nil
+}
+
 // All returns all synapses sorted by ID.
 func (s *JSONLStore) All() []*types.Synapse {
 	s.mu.RLock()

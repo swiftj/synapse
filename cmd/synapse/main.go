@@ -45,6 +45,8 @@ func main() {
 		cmdDone(args)
 	case "all-done":
 		cmdDoneAll()
+	case "delete", "rm":
+		cmdDelete(args)
 	case "breadcrumb", "bc":
 		cmdBreadcrumb(args)
 	case "serve":
@@ -85,6 +87,8 @@ Commands:
   claim <id>        Mark synapse as in-progress
   done <id>         Mark synapse as done
   all-done          Mark all tasks as done (cleanup command)
+  delete, rm <id>   Delete a synapse task
+      --all         Delete all tasks
   breadcrumb, bc    Manage breadcrumbs (persistent key-value storage)
       set <key> <value>   Set a breadcrumb value
           --task-id N     Link to task ID
@@ -477,6 +481,55 @@ func cmdDoneAll() {
 
 	saveStore(store)
 	fmt.Printf("Marked %d task(s) as done\n", count)
+}
+
+func cmdDelete(args []string) {
+	store := getStore()
+
+	// Check for --all flag
+	if len(args) > 0 && args[0] == "--all" {
+		all := store.All()
+		count := len(all)
+		if count == 0 {
+			fmt.Println("No tasks to delete")
+			return
+		}
+
+		if err := store.DeleteAll(); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		saveStore(store)
+		fmt.Printf("Deleted all %d task(s)\n", count)
+		return
+	}
+
+	// Delete single task by ID
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "error: synapse ID required (or use --all to delete all tasks)")
+		os.Exit(1)
+	}
+
+	id, err := strconv.Atoi(args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: invalid ID: %s\n", args[0])
+		os.Exit(1)
+	}
+
+	syn, err := store.Get(id)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	title := syn.Title
+	if err := store.Delete(id); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	saveStore(store)
+	fmt.Printf("Deleted synapse #%d: %s\n", id, title)
 }
 
 func getBreadcrumbStore() *storage.BreadcrumbStore {
