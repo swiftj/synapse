@@ -37,20 +37,20 @@ type jsonRPCRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params,omitempty"`
-	ID      interface{}     `json:"id"`
+	ID      any             `json:"id"`
 }
 
 type jsonRPCResponse struct {
-	JSONRPC string      `json:"jsonrpc"`
-	Result  interface{} `json:"result,omitempty"`
-	Error   *rpcError   `json:"error,omitempty"`
-	ID      interface{} `json:"id"`
+	JSONRPC string    `json:"jsonrpc"`
+	Result  any       `json:"result,omitempty"`
+	Error   *rpcError `json:"error,omitempty"`
+	ID      any       `json:"id"`
 }
 
 type rpcError struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
 }
 
 // MCP-specific structures
@@ -70,9 +70,9 @@ type initializeResult struct {
 }
 
 type tool struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	InputSchema map[string]interface{} `json:"inputSchema"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	InputSchema map[string]any `json:"inputSchema"`
 }
 
 type toolsListResult struct {
@@ -80,8 +80,8 @@ type toolsListResult struct {
 }
 
 type toolCallParams struct {
-	Name      string                 `json:"name"`
-	Arguments map[string]interface{} `json:"arguments,omitempty"`
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments,omitempty"`
 }
 
 type toolCallResult struct {
@@ -155,40 +155,40 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "create_task",
 			Description: "Create a new synapse task",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"title": map[string]interface{}{
+				"properties": map[string]any{
+					"title": map[string]any{
 						"type":        "string",
 						"description": "Task title (required)",
 					},
-					"priority": map[string]interface{}{
+					"priority": map[string]any{
 						"type":        "number",
 						"description": "Priority level (higher = more important, default 0)",
 					},
-					"blocked_by": map[string]interface{}{
+					"blocked_by": map[string]any{
 						"type":        "array",
 						"description": "Array of task IDs this task is blocked by",
-						"items": map[string]interface{}{
+						"items": map[string]any{
 							"type": "number",
 						},
 					},
-					"parent_id": map[string]interface{}{
+					"parent_id": map[string]any{
 						"type":        "number",
 						"description": "Parent task ID",
 					},
-					"assignee": map[string]interface{}{
+					"assignee": map[string]any{
 						"type":        "string",
 						"description": "Assignee role/name",
 					},
-					"discovered_from": map[string]interface{}{
+					"discovered_from": map[string]any{
 						"type":        "number",
 						"description": "ID of the task from which this task was discovered (provenance tracking)",
 					},
-					"labels": map[string]interface{}{
+					"labels": map[string]any{
 						"type":        "array",
 						"description": "Labels/tags for categorization (e.g., bug, feature, security)",
-						"items": map[string]interface{}{
+						"items": map[string]any{
 							"type": "string",
 						},
 					},
@@ -199,36 +199,36 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "update_task",
 			Description: "Update an existing synapse task",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"id": map[string]interface{}{
+				"properties": map[string]any{
+					"id": map[string]any{
 						"type":        "number",
 						"description": "Task ID (required)",
 					},
-					"status": map[string]interface{}{
+					"status": map[string]any{
 						"type":        "string",
 						"description": "New status (open, in-progress, blocked, review, done)",
 					},
-					"priority": map[string]interface{}{
+					"priority": map[string]any{
 						"type":        "number",
 						"description": "Priority level (higher = more important)",
 					},
-					"assignee": map[string]interface{}{
+					"assignee": map[string]any{
 						"type":        "string",
 						"description": "New assignee",
 					},
-					"blocked_by": map[string]interface{}{
+					"blocked_by": map[string]any{
 						"type":        "array",
 						"description": "Updated list of blocking task IDs",
-						"items": map[string]interface{}{
+						"items": map[string]any{
 							"type": "number",
 						},
 					},
-					"labels": map[string]interface{}{
+					"labels": map[string]any{
 						"type":        "array",
 						"description": "Labels/tags for categorization (e.g., bug, feature, security)",
-						"items": map[string]interface{}{
+						"items": map[string]any{
 							"type": "string",
 						},
 					},
@@ -239,10 +239,10 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "get_task",
 			Description: "Get a single task by ID",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"id": map[string]interface{}{
+				"properties": map[string]any{
+					"id": map[string]any{
 						"type":        "number",
 						"description": "Task ID (required)",
 					},
@@ -252,21 +252,40 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		},
 		{
 			Name:        "list_tasks",
-			Description: "List tasks with optional filters",
-			InputSchema: map[string]interface{}{
+			Description: "List tasks with optional filters and pagination",
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"status": map[string]interface{}{
+				"properties": map[string]any{
+					"status": map[string]any{
 						"type":        "string",
 						"description": "Filter by status",
 					},
-					"assignee": map[string]interface{}{
+					"assignee": map[string]any{
 						"type":        "string",
 						"description": "Filter by assignee",
 					},
-					"label": map[string]interface{}{
+					"label": map[string]any{
 						"type":        "string",
 						"description": "Filter by label",
+					},
+					"limit": map[string]any{
+						"type":        "number",
+						"description": "Maximum number of tasks to return (default: 20)",
+					},
+					"offset": map[string]any{
+						"type":        "number",
+						"description": "Number of tasks to skip for pagination",
+					},
+					"summary": map[string]any{
+						"type":        "boolean",
+						"description": "If true, return only id, title, status, priority (default: true)",
+					},
+					"fields": map[string]any{
+						"type":        "array",
+						"description": "Optional specific fields to include in the response",
+						"items": map[string]any{
+							"type": "string",
+						},
 					},
 				},
 			},
@@ -274,10 +293,10 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "get_next_task",
 			Description: "Get the highest priority ready task",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"assignee": map[string]interface{}{
+				"properties": map[string]any{
+					"assignee": map[string]any{
 						"type":        "string",
 						"description": "Filter by assignee role",
 					},
@@ -287,10 +306,10 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "complete_task",
 			Description: "Mark a task as done",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"id": map[string]interface{}{
+				"properties": map[string]any{
+					"id": map[string]any{
 						"type":        "number",
 						"description": "Task ID (required)",
 					},
@@ -301,18 +320,18 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "spawn_task",
 			Description: "Create a subtask discovered while working on another task (auto-links provenance)",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"parent_task_id": map[string]interface{}{
+				"properties": map[string]any{
+					"parent_task_id": map[string]any{
 						"type":        "number",
 						"description": "ID of the task being worked on when this was discovered",
 					},
-					"title": map[string]interface{}{
+					"title": map[string]any{
 						"type":        "string",
 						"description": "Title of the new discovered task",
 					},
-					"blocked_by_parent": map[string]interface{}{
+					"blocked_by_parent": map[string]any{
 						"type":        "boolean",
 						"description": "Whether this task should be blocked by the parent (default false)",
 					},
@@ -323,14 +342,14 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "add_note",
 			Description: "Add a note to a task for context persistence",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"id": map[string]interface{}{
+				"properties": map[string]any{
+					"id": map[string]any{
 						"type":        "number",
 						"description": "Task ID (required)",
 					},
-					"note": map[string]interface{}{
+					"note": map[string]any{
 						"type":        "string",
 						"description": "Note content to add",
 					},
@@ -341,18 +360,18 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "set_breadcrumb",
 			Description: "Store a key-value breadcrumb for cross-session persistence",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"key": map[string]interface{}{
+				"properties": map[string]any{
+					"key": map[string]any{
 						"type":        "string",
 						"description": "Namespaced key (e.g., 'auth.method', 'db.connection')",
 					},
-					"value": map[string]interface{}{
+					"value": map[string]any{
 						"type":        "string",
 						"description": "Value to store",
 					},
-					"task_id": map[string]interface{}{
+					"task_id": map[string]any{
 						"type":        "number",
 						"description": "Optional: link to task that discovered this",
 					},
@@ -363,10 +382,10 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "get_breadcrumb",
 			Description: "Retrieve a single breadcrumb by exact key",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"key": map[string]interface{}{
+				"properties": map[string]any{
+					"key": map[string]any{
 						"type":        "string",
 						"description": "Exact key to retrieve",
 					},
@@ -377,14 +396,14 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "list_breadcrumbs",
 			Description: "Query breadcrumbs with optional prefix filter",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"prefix": map[string]interface{}{
+				"properties": map[string]any{
+					"prefix": map[string]any{
 						"type":        "string",
 						"description": "Filter by key prefix (e.g., 'auth.' returns all auth breadcrumbs)",
 					},
-					"task_id": map[string]interface{}{
+					"task_id": map[string]any{
 						"type":        "number",
 						"description": "Filter by task ID",
 					},
@@ -394,10 +413,10 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "delete_breadcrumb",
 			Description: "Remove a breadcrumb by key",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"key": map[string]interface{}{
+				"properties": map[string]any{
+					"key": map[string]any{
 						"type":        "string",
 						"description": "Exact key to delete",
 					},
@@ -408,18 +427,18 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "claim_task",
 			Description: "Claim a task with locking (prevents other agents from claiming it)",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"id": map[string]interface{}{
+				"properties": map[string]any{
+					"id": map[string]any{
 						"type":        "number",
 						"description": "Task ID to claim",
 					},
-					"agent_id": map[string]interface{}{
+					"agent_id": map[string]any{
 						"type":        "string",
 						"description": "Your agent identifier (e.g., 'claude-1', 'coder-agent')",
 					},
-					"timeout_minutes": map[string]interface{}{
+					"timeout_minutes": map[string]any{
 						"type":        "number",
 						"description": "Claim timeout in minutes (default: 30)",
 					},
@@ -430,10 +449,10 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "release_claim",
 			Description: "Release your claim on a task",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"id": map[string]interface{}{
+				"properties": map[string]any{
+					"id": map[string]any{
 						"type":        "number",
 						"description": "Task ID to release",
 					},
@@ -444,14 +463,14 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "complete_task_as",
 			Description: "Mark a task as done with agent attribution",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"id": map[string]interface{}{
+				"properties": map[string]any{
+					"id": map[string]any{
 						"type":        "number",
 						"description": "Task ID to complete",
 					},
-					"agent_id": map[string]interface{}{
+					"agent_id": map[string]any{
 						"type":        "string",
 						"description": "Your agent identifier",
 					},
@@ -462,14 +481,14 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "get_context_window",
 			Description: "Get tasks modified within a time window (for session context)",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"minutes": map[string]interface{}{
+				"properties": map[string]any{
+					"minutes": map[string]any{
 						"type":        "number",
 						"description": "Look back N minutes (default: 60)",
 					},
-					"agent_id": map[string]interface{}{
+					"agent_id": map[string]any{
 						"type":        "string",
 						"description": "Filter by agent ID (optional)",
 					},
@@ -479,10 +498,10 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "my_tasks",
 			Description: "Get all tasks claimed by a specific agent",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"agent_id": map[string]interface{}{
+				"properties": map[string]any{
+					"agent_id": map[string]any{
 						"type":        "string",
 						"description": "Your agent identifier",
 					},
@@ -493,18 +512,18 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		{
 			Name:        "delete_task",
 			Description: "Delete a task by ID, delete all tasks, or delete all completed tasks",
-			InputSchema: map[string]interface{}{
+			InputSchema: map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"id": map[string]interface{}{
+				"properties": map[string]any{
+					"id": map[string]any{
 						"type":        "number",
 						"description": "Task ID to delete (omit when using delete_all or delete_completed)",
 					},
-					"delete_all": map[string]interface{}{
+					"delete_all": map[string]any{
 						"type":        "boolean",
 						"description": "If true, delete all tasks (id is ignored)",
 					},
-					"delete_completed": map[string]interface{}{
+					"delete_completed": map[string]any{
 						"type":        "boolean",
 						"description": "If true, delete all tasks with status 'done' (cleanup completed tasks)",
 					},
@@ -581,7 +600,7 @@ func (s *Server) handleToolsCall(req *jsonRPCRequest) {
 	s.sendResult(req.ID, result)
 }
 
-func (s *Server) createTask(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) createTask(args map[string]any) (toolCallResult, error) {
 	title, ok := args["title"].(string)
 	if !ok || title == "" {
 		return toolCallResult{}, fmt.Errorf("title is required")
@@ -597,7 +616,7 @@ func (s *Server) createTask(args map[string]interface{}) (toolCallResult, error)
 		syn.Priority = int(priority)
 	}
 
-	if blockedByRaw, ok := args["blocked_by"].([]interface{}); ok {
+	if blockedByRaw, ok := args["blocked_by"].([]any); ok {
 		blockedBy := make([]int, 0, len(blockedByRaw))
 		for _, v := range blockedByRaw {
 			if id, ok := v.(float64); ok {
@@ -619,7 +638,7 @@ func (s *Server) createTask(args map[string]interface{}) (toolCallResult, error)
 		syn.DiscoveredFrom = fmt.Sprintf("#%d", int(discoveredFrom))
 	}
 
-	if labelsRaw, ok := args["labels"].([]interface{}); ok {
+	if labelsRaw, ok := args["labels"].([]any); ok {
 		labels := make([]string, 0, len(labelsRaw))
 		for _, v := range labelsRaw {
 			if label, ok := v.(string); ok {
@@ -646,7 +665,7 @@ func (s *Server) createTask(args map[string]interface{}) (toolCallResult, error)
 	}, nil
 }
 
-func (s *Server) updateTask(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) updateTask(args map[string]any) (toolCallResult, error) {
 	id, ok := args["id"].(float64)
 	if !ok {
 		return toolCallResult{}, fmt.Errorf("id is required")
@@ -673,7 +692,7 @@ func (s *Server) updateTask(args map[string]interface{}) (toolCallResult, error)
 		syn.Assignee = assignee
 	}
 
-	if blockedByRaw, ok := args["blocked_by"].([]interface{}); ok {
+	if blockedByRaw, ok := args["blocked_by"].([]any); ok {
 		blockedBy := make([]int, 0, len(blockedByRaw))
 		for _, v := range blockedByRaw {
 			if bid, ok := v.(float64); ok {
@@ -683,7 +702,7 @@ func (s *Server) updateTask(args map[string]interface{}) (toolCallResult, error)
 		syn.BlockedBy = blockedBy
 	}
 
-	if labelsRaw, ok := args["labels"].([]interface{}); ok {
+	if labelsRaw, ok := args["labels"].([]any); ok {
 		labels := make([]string, 0, len(labelsRaw))
 		for _, v := range labelsRaw {
 			if label, ok := v.(string); ok {
@@ -710,7 +729,7 @@ func (s *Server) updateTask(args map[string]interface{}) (toolCallResult, error)
 	}, nil
 }
 
-func (s *Server) getTask(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) getTask(args map[string]any) (toolCallResult, error) {
 	id, ok := args["id"].(float64)
 	if !ok {
 		return toolCallResult{}, fmt.Errorf("id is required")
@@ -730,9 +749,10 @@ func (s *Server) getTask(args map[string]interface{}) (toolCallResult, error) {
 	}, nil
 }
 
-func (s *Server) listTasks(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) listTasks(args map[string]any) (toolCallResult, error) {
 	var tasks []*types.Synapse
 
+	// Apply filters
 	if label, ok := args["label"].(string); ok {
 		tasks = s.store.ByLabel(label)
 	} else if status, ok := args["status"].(string); ok {
@@ -743,7 +763,94 @@ func (s *Server) listTasks(args map[string]interface{}) (toolCallResult, error) 
 		tasks = s.store.All()
 	}
 
-	data, _ := json.MarshalIndent(tasks, "", "  ")
+	totalCount := len(tasks)
+
+	// Apply pagination
+	limit := 20
+	if l, ok := args["limit"].(float64); ok && l > 0 {
+		limit = int(l)
+	}
+	offset := 0
+	if o, ok := args["offset"].(float64); ok && o >= 0 {
+		offset = int(o)
+	}
+
+	// Apply offset
+	if offset >= len(tasks) {
+		tasks = []*types.Synapse{}
+	} else {
+		tasks = tasks[offset:]
+	}
+
+	// Apply limit
+	if len(tasks) > limit {
+		tasks = tasks[:limit]
+	}
+
+	// Check for summary mode (default true) and fields selection
+	summary := true
+	if s, ok := args["summary"].(bool); ok {
+		summary = s
+	}
+
+	var fieldsSet map[string]bool
+	if fieldsRaw, ok := args["fields"].([]any); ok && len(fieldsRaw) > 0 {
+		fieldsSet = make(map[string]bool, len(fieldsRaw))
+		for _, f := range fieldsRaw {
+			if fieldName, ok := f.(string); ok {
+				fieldsSet[fieldName] = true
+			}
+		}
+		// If fields are explicitly specified, disable summary mode
+		summary = false
+	}
+
+	// Build response data
+	var resultTasks []map[string]any
+
+	if fieldsSet != nil {
+		// Return only specified fields
+		resultTasks = make([]map[string]any, 0, len(tasks))
+		for _, t := range tasks {
+			taskMap := s.synapseToFieldMap(t, fieldsSet)
+			resultTasks = append(resultTasks, taskMap)
+		}
+	} else if summary {
+		// Summary mode: return only id, title, status, priority
+		resultTasks = make([]map[string]any, 0, len(tasks))
+		for _, t := range tasks {
+			taskMap := map[string]any{
+				"id":       t.ID,
+				"title":    t.Title,
+				"status":   t.Status,
+				"priority": t.Priority,
+			}
+			resultTasks = append(resultTasks, taskMap)
+		}
+	}
+
+	// Build final response with pagination metadata
+	var data []byte
+	if resultTasks != nil {
+		// Summary or field-selected mode
+		response := map[string]any{
+			"tasks":  resultTasks,
+			"total":  totalCount,
+			"limit":  limit,
+			"offset": offset,
+		}
+		data, _ = json.Marshal(response)
+	} else {
+		// Full mode: return complete task objects
+		response := map[string]any{
+			"tasks":  tasks,
+			"total":  totalCount,
+			"limit":  limit,
+			"offset": offset,
+		}
+		data, _ = json.Marshal(response)
+	}
+
 	return toolCallResult{
 		Content: []toolContent{{
 			Type: "text",
@@ -752,7 +859,63 @@ func (s *Server) listTasks(args map[string]interface{}) (toolCallResult, error) 
 	}, nil
 }
 
-func (s *Server) getNextTask(args map[string]interface{}) (toolCallResult, error) {
+// synapseToFieldMap converts a Synapse to a map with only the specified fields.
+func (s *Server) synapseToFieldMap(t *types.Synapse, fields map[string]bool) map[string]any {
+	result := make(map[string]any)
+
+	if fields["id"] {
+		result["id"] = t.ID
+	}
+	if fields["title"] {
+		result["title"] = t.Title
+	}
+	if fields["description"] {
+		result["description"] = t.Description
+	}
+	if fields["status"] {
+		result["status"] = t.Status
+	}
+	if fields["priority"] {
+		result["priority"] = t.Priority
+	}
+	if fields["blocked_by"] {
+		result["blocked_by"] = t.BlockedBy
+	}
+	if fields["parent_id"] {
+		result["parent_id"] = t.ParentID
+	}
+	if fields["assignee"] {
+		result["assignee"] = t.Assignee
+	}
+	if fields["discovered_from"] {
+		result["discovered_from"] = t.DiscoveredFrom
+	}
+	if fields["labels"] {
+		result["labels"] = t.Labels
+	}
+	if fields["notes"] {
+		result["notes"] = t.Notes
+	}
+	if fields["claimed_by"] {
+		result["claimed_by"] = t.ClaimedBy
+	}
+	if fields["claimed_at"] {
+		result["claimed_at"] = t.ClaimedAt
+	}
+	if fields["completed_by"] {
+		result["completed_by"] = t.CompletedBy
+	}
+	if fields["created_at"] {
+		result["created_at"] = t.CreatedAt
+	}
+	if fields["updated_at"] {
+		result["updated_at"] = t.UpdatedAt
+	}
+
+	return result
+}
+
+func (s *Server) getNextTask(args map[string]any) (toolCallResult, error) {
 	ready := s.store.Ready()
 
 	if assignee, ok := args["assignee"].(string); ok {
@@ -794,7 +957,7 @@ func (s *Server) getNextTask(args map[string]interface{}) (toolCallResult, error
 	}, nil
 }
 
-func (s *Server) completeTask(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) completeTask(args map[string]any) (toolCallResult, error) {
 	id, ok := args["id"].(float64)
 	if !ok {
 		return toolCallResult{}, fmt.Errorf("id is required")
@@ -824,7 +987,7 @@ func (s *Server) completeTask(args map[string]interface{}) (toolCallResult, erro
 	}, nil
 }
 
-func (s *Server) spawnTask(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) spawnTask(args map[string]any) (toolCallResult, error) {
 	parentID, ok := args["parent_task_id"].(float64)
 	if !ok {
 		return toolCallResult{}, fmt.Errorf("parent_task_id is required")
@@ -871,7 +1034,7 @@ func (s *Server) spawnTask(args map[string]interface{}) (toolCallResult, error) 
 	}, nil
 }
 
-func (s *Server) addNote(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) addNote(args map[string]any) (toolCallResult, error) {
 	id, ok := args["id"].(float64)
 	if !ok {
 		return toolCallResult{}, fmt.Errorf("id is required")
@@ -906,7 +1069,7 @@ func (s *Server) addNote(args map[string]interface{}) (toolCallResult, error) {
 	}, nil
 }
 
-func (s *Server) setBreadcrumb(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) setBreadcrumb(args map[string]any) (toolCallResult, error) {
 	key, ok := args["key"].(string)
 	if !ok || key == "" {
 		return toolCallResult{}, fmt.Errorf("key is required")
@@ -931,7 +1094,7 @@ func (s *Server) setBreadcrumb(args map[string]interface{}) (toolCallResult, err
 		log.Printf("Warning: failed to save breadcrumb: %v", err)
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"success": true,
 		"key":     key,
 		"created": created,
@@ -950,7 +1113,7 @@ func (s *Server) setBreadcrumb(args map[string]interface{}) (toolCallResult, err
 	}, nil
 }
 
-func (s *Server) getBreadcrumb(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) getBreadcrumb(args map[string]any) (toolCallResult, error) {
 	key, ok := args["key"].(string)
 	if !ok || key == "" {
 		return toolCallResult{}, fmt.Errorf("key is required")
@@ -958,7 +1121,7 @@ func (s *Server) getBreadcrumb(args map[string]interface{}) (toolCallResult, err
 
 	b, found := s.bcStore.Get(key)
 	if !found {
-		result := map[string]interface{}{
+		result := map[string]any{
 			"found": false,
 		}
 		data, _ := json.MarshalIndent(result, "", "  ")
@@ -970,7 +1133,7 @@ func (s *Server) getBreadcrumb(args map[string]interface{}) (toolCallResult, err
 		}, nil
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"found":      true,
 		"breadcrumb": b,
 	}
@@ -983,7 +1146,7 @@ func (s *Server) getBreadcrumb(args map[string]interface{}) (toolCallResult, err
 	}, nil
 }
 
-func (s *Server) listBreadcrumbs(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) listBreadcrumbs(args map[string]any) (toolCallResult, error) {
 	var breadcrumbs []*types.Breadcrumb
 
 	if taskID, ok := args["task_id"].(float64); ok {
@@ -994,7 +1157,7 @@ func (s *Server) listBreadcrumbs(args map[string]interface{}) (toolCallResult, e
 		breadcrumbs = s.bcStore.List("")
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"breadcrumbs": breadcrumbs,
 		"total":       len(breadcrumbs),
 	}
@@ -1007,7 +1170,7 @@ func (s *Server) listBreadcrumbs(args map[string]interface{}) (toolCallResult, e
 	}, nil
 }
 
-func (s *Server) deleteBreadcrumb(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) deleteBreadcrumb(args map[string]any) (toolCallResult, error) {
 	key, ok := args["key"].(string)
 	if !ok || key == "" {
 		return toolCallResult{}, fmt.Errorf("key is required")
@@ -1020,7 +1183,7 @@ func (s *Server) deleteBreadcrumb(args map[string]interface{}) (toolCallResult, 
 		}
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"success": true,
 		"deleted": deleted,
 	}
@@ -1033,7 +1196,7 @@ func (s *Server) deleteBreadcrumb(args map[string]interface{}) (toolCallResult, 
 	}, nil
 }
 
-func (s *Server) claimTask(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) claimTask(args map[string]any) (toolCallResult, error) {
 	id, ok := args["id"].(float64)
 	if !ok {
 		return toolCallResult{}, fmt.Errorf("id is required")
@@ -1056,7 +1219,7 @@ func (s *Server) claimTask(args map[string]interface{}) (toolCallResult, error) 
 
 	claimed := syn.Claim(agentID, timeout)
 	if !claimed {
-		result := map[string]interface{}{
+		result := map[string]any{
 			"success":       false,
 			"claimed":       false,
 			"claimed_by":    syn.ClaimedBy,
@@ -1089,7 +1252,7 @@ func (s *Server) claimTask(args map[string]interface{}) (toolCallResult, error) 
 	}, nil
 }
 
-func (s *Server) releaseClaim(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) releaseClaim(args map[string]any) (toolCallResult, error) {
 	id, ok := args["id"].(float64)
 	if !ok {
 		return toolCallResult{}, fmt.Errorf("id is required")
@@ -1119,7 +1282,7 @@ func (s *Server) releaseClaim(args map[string]interface{}) (toolCallResult, erro
 	}, nil
 }
 
-func (s *Server) completeTaskAs(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) completeTaskAs(args map[string]any) (toolCallResult, error) {
 	id, ok := args["id"].(float64)
 	if !ok {
 		return toolCallResult{}, fmt.Errorf("id is required")
@@ -1154,7 +1317,7 @@ func (s *Server) completeTaskAs(args map[string]interface{}) (toolCallResult, er
 	}, nil
 }
 
-func (s *Server) getContextWindow(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) getContextWindow(args map[string]any) (toolCallResult, error) {
 	minutes := 60.0
 	if m, ok := args["minutes"].(float64); ok {
 		minutes = m
@@ -1174,7 +1337,7 @@ func (s *Server) getContextWindow(args map[string]interface{}) (toolCallResult, 
 		tasks = filtered
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"tasks":        tasks,
 		"total":        len(tasks),
 		"since":        since.Format(time.RFC3339),
@@ -1189,7 +1352,7 @@ func (s *Server) getContextWindow(args map[string]interface{}) (toolCallResult, 
 	}, nil
 }
 
-func (s *Server) myTasks(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) myTasks(args map[string]any) (toolCallResult, error) {
 	agentID, ok := args["agent_id"].(string)
 	if !ok || agentID == "" {
 		return toolCallResult{}, fmt.Errorf("agent_id is required")
@@ -1197,7 +1360,7 @@ func (s *Server) myTasks(args map[string]interface{}) (toolCallResult, error) {
 
 	tasks := s.store.ClaimedBy(agentID)
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"tasks":    tasks,
 		"total":    len(tasks),
 		"agent_id": agentID,
@@ -1211,7 +1374,7 @@ func (s *Server) myTasks(args map[string]interface{}) (toolCallResult, error) {
 	}, nil
 }
 
-func (s *Server) deleteTask(args map[string]interface{}) (toolCallResult, error) {
+func (s *Server) deleteTask(args map[string]any) (toolCallResult, error) {
 	// Check if delete_all is specified
 	if deleteAll, ok := args["delete_all"].(bool); ok && deleteAll {
 		all := s.store.All()
@@ -1297,7 +1460,7 @@ func (s *Server) deleteTask(args map[string]interface{}) (toolCallResult, error)
 	}, nil
 }
 
-func (s *Server) sendResult(id interface{}, result interface{}) {
+func (s *Server) sendResult(id any, result any) {
 	resp := jsonRPCResponse{
 		JSONRPC: "2.0",
 		Result:  result,
@@ -1307,7 +1470,7 @@ func (s *Server) sendResult(id interface{}, result interface{}) {
 	s.writeResponse(resp)
 }
 
-func (s *Server) sendError(id interface{}, code int, message string, data interface{}) {
+func (s *Server) sendError(id any, code int, message string, data any) {
 	resp := jsonRPCResponse{
 		JSONRPC: "2.0",
 		Error: &rpcError{

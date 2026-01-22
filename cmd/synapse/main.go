@@ -17,7 +17,7 @@ import (
 	"github.com/swiftj/synapse/pkg/types"
 )
 
-const version = "0.3.2"
+const version = "0.3.3"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -79,6 +79,9 @@ Commands:
       --assignee X  Assign to role (e.g., @qa, @coder)
   list, ls          List all synapses
       --status X    Filter by status (open, in-progress, blocked, review, done)
+      --limit N     Limit output to N tasks (default 20, 0 for unlimited)
+      --summary     Condensed output (default)
+      --full        Show all fields for each task
       --json        Output as JSON
   ready             List ready (unblocked, open) tasks
       --json        Output as JSON for agents
@@ -252,6 +255,8 @@ func cmdAdd(args []string) {
 func cmdList(args []string) {
 	var statusFilter string
 	var asJSON bool
+	var fullOutput bool
+	limit := 20 // default limit
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -262,6 +267,20 @@ func cmdList(args []string) {
 			}
 		case "--json":
 			asJSON = true
+		case "--limit":
+			if i+1 < len(args) {
+				i++
+				n, err := strconv.Atoi(args[i])
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "error: invalid limit: %s\n", args[i])
+					os.Exit(1)
+				}
+				limit = n
+			}
+		case "--full":
+			fullOutput = true
+		case "--summary":
+			fullOutput = false // explicit summary mode (default)
 		}
 	}
 
@@ -280,6 +299,13 @@ func cmdList(args []string) {
 		synapses = store.All()
 	}
 
+	totalCount := len(synapses)
+
+	// Apply limit (0 means unlimited)
+	if limit > 0 && len(synapses) > limit {
+		synapses = synapses[:limit]
+	}
+
 	if asJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -292,9 +318,19 @@ func cmdList(args []string) {
 		return
 	}
 
-	fmt.Printf("Found %d synapse(s):\n\n", len(synapses))
+	if totalCount > len(synapses) {
+		fmt.Printf("Showing %d of %d synapse(s) (use --limit 0 for all):\n\n", len(synapses), totalCount)
+	} else {
+		fmt.Printf("Found %d synapse(s):\n\n", len(synapses))
+	}
+
 	for _, syn := range synapses {
-		printSynapse(syn)
+		if fullOutput {
+			printSynapseDetailed(syn)
+			fmt.Println()
+		} else {
+			printSynapse(syn)
+		}
 	}
 }
 
