@@ -89,6 +89,7 @@ Commands:
   all-done          Mark all tasks as done (cleanup command)
   delete, rm <id>   Delete a synapse task
       --all         Delete all tasks
+      --done        Delete all completed tasks (cleanup)
   breadcrumb, bc    Manage breadcrumbs (persistent key-value storage)
       set <key> <value>   Set a breadcrumb value
           --task-id N     Link to task ID
@@ -504,9 +505,27 @@ func cmdDelete(args []string) {
 		return
 	}
 
+	// Check for --done flag (cleanup completed tasks)
+	if len(args) > 0 && args[0] == "--done" {
+		count, err := store.DeleteByStatus(types.StatusDone)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+
+		if count == 0 {
+			fmt.Println("No completed tasks to delete")
+			return
+		}
+
+		saveStore(store)
+		fmt.Printf("Deleted %d completed task(s)\n", count)
+		return
+	}
+
 	// Delete single task by ID
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "error: synapse ID required (or use --all to delete all tasks)")
+		fmt.Fprintln(os.Stderr, "error: synapse ID required (or use --all/--done to delete tasks)")
 		os.Exit(1)
 	}
 

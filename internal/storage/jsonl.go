@@ -262,6 +262,26 @@ func (s *JSONLStore) DeleteAll() error {
 	return nil
 }
 
+// DeleteByStatus removes all synapses with the given status.
+// Returns the number of deleted synapses.
+func (s *JSONLStore) DeleteByStatus(status types.Status) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var toDelete []int
+	for id, syn := range s.synapses {
+		if syn.Status == status {
+			toDelete = append(toDelete, id)
+		}
+	}
+
+	for _, id := range toDelete {
+		delete(s.synapses, id)
+	}
+
+	return len(toDelete), nil
+}
+
 // All returns all synapses sorted by ID.
 func (s *JSONLStore) All() []*types.Synapse {
 	s.mu.RLock()

@@ -492,17 +492,21 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		},
 		{
 			Name:        "delete_task",
-			Description: "Delete a task by ID, or delete all tasks",
+			Description: "Delete a task by ID, delete all tasks, or delete all completed tasks",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"id": map[string]interface{}{
 						"type":        "number",
-						"description": "Task ID to delete (omit to delete all when delete_all is true)",
+						"description": "Task ID to delete (omit when using delete_all or delete_completed)",
 					},
 					"delete_all": map[string]interface{}{
 						"type":        "boolean",
 						"description": "If true, delete all tasks (id is ignored)",
+					},
+					"delete_completed": map[string]interface{}{
+						"type":        "boolean",
+						"description": "If true, delete all tasks with status 'done' (cleanup completed tasks)",
 					},
 				},
 			},
@@ -1237,10 +1241,38 @@ func (s *Server) deleteTask(args map[string]interface{}) (toolCallResult, error)
 		}, nil
 	}
 
+	// Check if delete_completed is specified (cleanup done tasks)
+	if deleteCompleted, ok := args["delete_completed"].(bool); ok && deleteCompleted {
+		count, err := s.store.DeleteByStatus(types.StatusDone)
+		if err != nil {
+			return toolCallResult{}, err
+		}
+
+		if count == 0 {
+			return toolCallResult{
+				Content: []toolContent{{
+					Type: "text",
+					Text: "No completed tasks to delete",
+				}},
+			}, nil
+		}
+
+		if err := s.store.Save(); err != nil {
+			log.Printf("Warning: failed to save after delete completed: %v", err)
+		}
+
+		return toolCallResult{
+			Content: []toolContent{{
+				Type: "text",
+				Text: fmt.Sprintf("Deleted %d completed task(s)", count),
+			}},
+		}, nil
+	}
+
 	// Delete single task by ID
 	id, ok := args["id"].(float64)
 	if !ok {
-		return toolCallResult{}, fmt.Errorf("id is required (or set delete_all to true)")
+		return toolCallResult{}, fmt.Errorf("id is required (or set delete_all or delete_completed to true)")
 	}
 
 	syn, err := s.store.Get(int(id))
