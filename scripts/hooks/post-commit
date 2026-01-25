@@ -1,0 +1,136 @@
+#!/bin/bash
+# Post-commit hook: Auto-tag and release after version bump
+#
+# Behavior:
+#   - Only runs on main/master branch
+#   - Only creates release if version was bumped in this commit
+#   - Auto-releases for [minor] and [major] bumps
+#   - Use [release] in commit msg to force release on patch bumps
+#   - Use [skip-release] to skip release even on minor/major
+#
+# Requirements:
+#   - gh CLI installed and authenticated
+#   - Push access to repository
+#
+# Location: scripts/hooks/post-commit
+
+VERSION_FILE="cmd/synapse/main.go"
+RELEASE_NOTES_FILE=".git/RELEASE_NOTES"
+
+# Only run on main/master branch
+CURRENT_BRANCH=$(git branch --show-current)
+if [[ "$CURRENT_BRANCH" != "main" && "$CURRENT_BRANCH" != "master" ]]; then
+    exit 0
+fi
+
+# Check if gh CLI is available
+if ! command -v gh &> /dev/null; then
+    echo "Note: gh CLI not found, skipping auto-release"
+    exit 0
+fi
+
+# Check if version file was modified in this commit
+if ! git diff-tree --no-commit-id --name-only -r HEAD | grep -q "^${VERSION_FILE}$"; then
+    exit 0
+fi
+
+# Get the new version from the committed file
+NEW_VERSION=$(grep -E '^const version = "[0-9]+\.[0-9]+\.[0-9]+"' "$VERSION_FILE" | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
+
+if [[ -z "$NEW_VERSION" ]]; then
+    exit 0
+fi
+
+TAG_NAME="v${NEW_VERSION}"
+
+# Check if tag already exists
+if git tag -l "$TAG_NAME" | grep -q "$TAG_NAME"; then
+    exit 0
+fi
+
+# Get the commit message to check for keywords
+COMMIT_MSG=$(git log -1 --pretty=%B)
+
+# Check for skip-release
+if echo "$COMMIT_MSG" | grep -qi '\[skip-release\]'; then
+    echo "Release skipped ([skip-release] detected)"
+    exit 0
+fi
+
+# Determine if we should release
+SHOULD_RELEASE=false
+RELEASE_TYPE="patch"
+
+if echo "$COMMIT_MSG" | grep -qi '\[major\]'; then
+    SHOULD_RELEASE=true
+    RELEASE_TYPE="major"
+elif echo "$COMMIT_MSG" | grep -qi '\[minor\]'; then
+    SHOULD_RELEASE=true
+    RELEASE_TYPE="minor"
+elif echo "$COMMIT_MSG" | grep -qi '\[release\]'; then
+    SHOULD_RELEASE=true
+    RELEASE_TYPE="patch"
+fi
+
+# For now, always create tag but only release for minor/major or explicit [release]
+# Create annotated tag
+COMMIT_SUBJECT=$(git log -1 --pretty=%s)
+git tag -a "$TAG_NAME" -m "$TAG_NAME: $COMMIT_SUBJECT"
+
+if [[ $? -ne 0 ]]; then
+    echo "Warning: Failed to create tag $TAG_NAME"
+    exit 0
+fi
+
+echo "Created tag: $TAG_NAME"
+
+# Push the tag
+git push origin "$TAG_NAME" 2>/dev/null
+
+if [[ $? -ne 0 ]]; then
+    echo "Warning: Failed to push tag $TAG_NAME (will need manual push)"
+    exit 0
+fi
+
+echo "Pushed tag: $TAG_NAME"
+
+# Create GitHub release if appropriate
+if [[ "$SHOULD_RELEASE" == "true" ]]; then
+    # Generate release title based on type
+    case "$RELEASE_TYPE" in
+        major)
+            RELEASE_TITLE="$TAG_NAME - Major Release"
+            ;;
+        minor)
+            RELEASE_TITLE="$TAG_NAME - Feature Release"
+            ;;
+        *)
+            RELEASE_TITLE="$TAG_NAME"
+            ;;
+    esac
+
+    # Generate release notes from commit message
+    RELEASE_BODY=$(cat <<EOF
+## Changes
+
+$COMMIT_SUBJECT
+
+## Install
+
+\`\`\`bash
+go install github.com/swiftj/synapse/cmd/synapse@$TAG_NAME
+\`\`\`
+EOF
+)
+
+    gh release create "$TAG_NAME" \
+        --title "$RELEASE_TITLE" \
+        --notes "$RELEASE_BODY" \
+        2>/dev/null
+
+    if [[ $? -eq 0 ]]; then
+        echo "Created GitHub release: $TAG_NAME"
+    else
+        echo "Warning: Failed to create GitHub release (tag was pushed successfully)"
+    fi
+fi
