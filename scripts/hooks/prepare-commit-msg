@@ -10,6 +10,10 @@
 
 COMMIT_MSG_FILE=$1
 COMMIT_SOURCE=$2
+BUMP_TYPE_FILE=".git/VERSION_BUMP_TYPE"
+
+# Clean up any stale bump type file first
+rm -f "$BUMP_TYPE_FILE"
 
 # Only process for regular commits (not merges, squashes, etc.)
 if [[ "$COMMIT_SOURCE" != "" && "$COMMIT_SOURCE" != "message" ]]; then
@@ -22,22 +26,22 @@ if [[ -f "$COMMIT_MSG_FILE" ]]; then
 
     # Check for skip-version
     if echo "$COMMIT_MSG" | grep -qi '\[skip-version\]'; then
-        echo "skip" > .git/VERSION_BUMP_TYPE
+        echo "skip" > "$BUMP_TYPE_FILE"
         exit 0
     fi
 
     # Check for major bump
     if echo "$COMMIT_MSG" | grep -qi '\[major\]'; then
-        echo "major" > .git/VERSION_BUMP_TYPE
+        echo "major" > "$BUMP_TYPE_FILE"
         exit 0
     fi
 
     # Check for minor bump
     if echo "$COMMIT_MSG" | grep -qi '\[minor\]'; then
-        echo "minor" > .git/VERSION_BUMP_TYPE
+        echo "minor" > "$BUMP_TYPE_FILE"
         exit 0
     fi
 fi
 
 # Default to patch
-echo "patch" > .git/VERSION_BUMP_TYPE
+echo "patch" > "$BUMP_TYPE_FILE"
