@@ -59,6 +59,10 @@ type serverInfo struct {
 	Version string `json:"version"`
 }
 
+// MaxResponseSize is the maximum allowed response size in bytes.
+// MCP clients typically have token limits; 50KB is a safe threshold.
+const MaxResponseSize = 50000
+
 type serverCapabilities struct {
 	Tools struct{} `json:"tools"`
 }
@@ -252,7 +256,7 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 		},
 		{
 			Name:        "list_tasks",
-			Description: "List tasks with optional filters and pagination",
+			Description: "List tasks with optional filters and pagination. Returns summary by default to prevent response size issues. Use get_task(id) for full task details.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -278,14 +282,18 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 					},
 					"summary": map[string]any{
 						"type":        "boolean",
-						"description": "If true, return only id, title, status, priority (default: true)",
+						"description": "If true, return only id, title, status, priority (default: true). If false and response exceeds size limit, auto-falls back to summary with truncation notice.",
 					},
 					"fields": map[string]any{
 						"type":        "array",
-						"description": "Optional specific fields to include in the response",
+						"description": "Optional specific fields to include in the response. Recommended over summary:false for large datasets.",
 						"items": map[string]any{
 							"type": "string",
 						},
+					},
+					"max_chars": map[string]any{
+						"type":        "number",
+						"description": "Maximum response size in characters (default: 50000). Responses exceeding this auto-truncate to summary mode.",
 					},
 				},
 			},
@@ -775,6 +783,12 @@ func (s *Server) listTasks(args map[string]any) (toolCallResult, error) {
 		offset = int(o)
 	}
 
+	// Response size limit (caller can override)
+	maxChars := MaxResponseSize
+	if mc, ok := args["max_chars"].(float64); ok && mc > 0 {
+		maxChars = int(mc)
+	}
+
 	// Apply offset
 	if offset >= len(tasks) {
 		tasks = []*types.Synapse{}
@@ -831,9 +845,11 @@ func (s *Server) listTasks(args map[string]any) (toolCallResult, error) {
 
 	// Build final response with pagination metadata
 	var data []byte
+	var response map[string]any
+
 	if resultTasks != nil {
 		// Summary or field-selected mode
-		response := map[string]any{
+		response = map[string]any{
 			"tasks":  resultTasks,
 			"total":  totalCount,
 			"limit":  limit,
@@ -842,13 +858,53 @@ func (s *Server) listTasks(args map[string]any) (toolCallResult, error) {
 		data, _ = json.Marshal(response)
 	} else {
 		// Full mode: return complete task objects
-		response := map[string]any{
+		response = map[string]any{
 			"tasks":  tasks,
 			"total":  totalCount,
 			"limit":  limit,
 			"offset": offset,
 		}
 		data, _ = json.Marshal(response)
+
+		// Check if response exceeds size limit - auto-fallback to summary mode
+		if len(data) > maxChars {
+			log.Printf("Response size %d exceeds limit %d, falling back to summary mode", len(data), maxChars)
+
+			// Rebuild as summary with truncated notes indicator
+			summaryTasks := make([]map[string]any, 0, len(tasks))
+			for _, t := range tasks {
+				taskMap := map[string]any{
+					"id":       t.ID,
+					"title":    t.Title,
+					"status":   t.Status,
+					"priority": t.Priority,
+				}
+				// Include note count so caller knows there's more data
+				if len(t.Notes) > 0 {
+					taskMap["notes_count"] = len(t.Notes)
+				}
+				if t.Description != "" {
+					// Truncate long descriptions
+					desc := t.Description
+					if len(desc) > 100 {
+						desc = desc[:97] + "..."
+					}
+					taskMap["description"] = desc
+				}
+				summaryTasks = append(summaryTasks, taskMap)
+			}
+
+			response = map[string]any{
+				"tasks":            summaryTasks,
+				"total":            totalCount,
+				"limit":            limit,
+				"offset":           offset,
+				"truncated":        true,
+				"truncation_reason": "response_size_exceeded",
+				"hint":             "Use get_task(id) to retrieve full task details, or use fields parameter to select specific fields",
+			}
+			data, _ = json.Marshal(response)
+		}
 	}
 
 	return toolCallResult{
