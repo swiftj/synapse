@@ -1,4 +1,6 @@
-// Package mcp implements a Model Context Protocol server for Synapse.
+// Package mcp implements a Model Context Protocol (MCP) server for Synapse.
+// It provides JSON-RPC 2.0 based tools for task management, breadcrumbs,
+// and multi-agent coordination over stdio.
 package mcp
 
 import (
