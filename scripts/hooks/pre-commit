@@ -1,6 +1,9 @@
 #!/bin/bash
 # Pre-commit hook: Auto-increment SemVer version
 #
+# Reads commit message directly from .git/COMMIT_EDITMSG (populated by
+# git before any hooks run). No dependency on other hooks.
+#
 # Behavior:
 #   - Default: Bumps patch version (0.3.2 -> 0.3.3)
 #   - [minor] in commit msg: Bumps minor (0.3.2 -> 0.4.0)
@@ -16,7 +19,7 @@
 
 VERSION_FILE="cmd/synapse/main.go"
 README_FILE="README.md"
-BUMP_TYPE_FILE=".git/VERSION_BUMP_TYPE"
+COMMIT_MSG_FILE=".git/COMMIT_EDITMSG"
 
 # Check if version file exists
 if [[ ! -f "$VERSION_FILE" ]]; then
@@ -26,21 +29,29 @@ fi
 
 # Check if this is a merge commit (skip version bump)
 if [[ -f ".git/MERGE_HEAD" ]]; then
-    rm -f "$BUMP_TYPE_FILE"
     exit 0
 fi
 
-# Read bump type (set by prepare-commit-msg or default to patch)
+# Check if Go files are staged (only bump for code changes)
+if ! git diff --cached --name-only | grep -q "\.go$"; then
+    exit 0
+fi
+
+# Determine bump type from commit message
 BUMP_TYPE="patch"
-if [[ -f "$BUMP_TYPE_FILE" ]]; then
-    BUMP_TYPE=$(cat "$BUMP_TYPE_FILE")
-    rm -f "$BUMP_TYPE_FILE"
-fi
+if [[ -f "$COMMIT_MSG_FILE" ]]; then
+    COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
 
-# Skip if explicitly requested
-if [[ "$BUMP_TYPE" == "skip" ]]; then
-    echo "Version bump skipped ([skip-version] detected)"
-    exit 0
+    if echo "$COMMIT_MSG" | grep -qi '\[skip-version\]'; then
+        echo "Version bump skipped ([skip-version] detected)"
+        exit 0
+    fi
+
+    if echo "$COMMIT_MSG" | grep -qi '\[major\]'; then
+        BUMP_TYPE="major"
+    elif echo "$COMMIT_MSG" | grep -qi '\[minor\]'; then
+        BUMP_TYPE="minor"
+    fi
 fi
 
 # Extract current version
@@ -55,12 +66,6 @@ fi
 MAJOR=$(echo "$CURRENT_VERSION" | cut -d. -f1)
 MINOR=$(echo "$CURRENT_VERSION" | cut -d. -f2)
 PATCH=$(echo "$CURRENT_VERSION" | cut -d. -f3)
-
-# Check if main.go is staged (only bump if we're making code changes)
-if ! git diff --cached --name-only | grep -q "\.go$"; then
-    # No Go files staged, skip version bump
-    exit 0
-fi
 
 # Calculate new version based on bump type
 case "$BUMP_TYPE" in
@@ -85,10 +90,8 @@ NEW_VERSION="${NEW_MAJOR}.${NEW_MINOR}.${NEW_PATCH}"
 
 # Update the version file (main.go)
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS sed requires different syntax
     sed -i '' "s/const version = \"$CURRENT_VERSION\"/const version = \"$NEW_VERSION\"/" "$VERSION_FILE"
 else
-    # Linux sed
     sed -i "s/const version = \"$CURRENT_VERSION\"/const version = \"$NEW_VERSION\"/" "$VERSION_FILE"
 fi
 
