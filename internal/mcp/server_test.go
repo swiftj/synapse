@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -168,6 +169,130 @@ func TestListTasks_FieldsSelection(t *testing.T) {
 	}
 	if _, ok := task["notes"]; ok {
 		t.Error("should not have notes field")
+	}
+}
+
+func TestStringTypedParameters(t *testing.T) {
+	dir := t.TempDir()
+	store := storage.NewJSONLStore(dir)
+	if _, err := store.Init(); err != nil {
+		t.Fatalf("failed to init store: %v", err)
+	}
+
+	// Create a task to operate on
+	syn, _ := store.Create("Test task")
+	store.Save()
+	taskID := syn.ID
+
+	bcStore := storage.NewBreadcrumbStore(dir)
+	server := NewServer(store, bcStore)
+
+	// Test: claim_task with string ID (reproduces the reported bug)
+	t.Run("claim_task accepts string id", func(t *testing.T) {
+		result, err := server.claimTask(map[string]any{
+			"id":       fmt.Sprintf("%d", taskID), // string "1" instead of float64(1)
+			"agent_id": "claude",
+		})
+		if err != nil {
+			t.Fatalf("claim_task with string id failed: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("claim_task returned error: %s", result.Content[0].Text)
+		}
+	})
+
+	// Test: get_task with string ID
+	t.Run("get_task accepts string id", func(t *testing.T) {
+		result, err := server.getTask(map[string]any{
+			"id": fmt.Sprintf("%d", taskID),
+		})
+		if err != nil {
+			t.Fatalf("get_task with string id failed: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("get_task returned error: %s", result.Content[0].Text)
+		}
+	})
+
+	// Test: complete_task with string ID
+	t.Run("complete_task accepts string id", func(t *testing.T) {
+		result, err := server.completeTask(map[string]any{
+			"id": fmt.Sprintf("%d", taskID),
+		})
+		if err != nil {
+			t.Fatalf("complete_task with string id failed: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("complete_task returned error: %s", result.Content[0].Text)
+		}
+	})
+
+	// Test: list_tasks with string limit
+	t.Run("list_tasks accepts string limit", func(t *testing.T) {
+		result, err := server.listTasks(map[string]any{
+			"limit": "5",
+		})
+		if err != nil {
+			t.Fatalf("list_tasks with string limit failed: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("list_tasks returned error: %s", result.Content[0].Text)
+		}
+	})
+
+	// Test: invalid string should give clear error
+	t.Run("non-numeric string gives clear error", func(t *testing.T) {
+		_, err := server.getTask(map[string]any{
+			"id": "not-a-number",
+		})
+		if err == nil {
+			t.Fatal("expected error for non-numeric string id")
+		}
+		if !strings.Contains(err.Error(), "must be a number") {
+			t.Errorf("expected clear error message, got: %s", err.Error())
+		}
+	})
+
+	// Test: missing id gives clear error
+	t.Run("missing id gives clear error", func(t *testing.T) {
+		_, err := server.getTask(map[string]any{})
+		if err == nil {
+			t.Fatal("expected error for missing id")
+		}
+		if !strings.Contains(err.Error(), "is required") {
+			t.Errorf("expected 'required' error message, got: %s", err.Error())
+		}
+	})
+}
+
+func TestToFloat64(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   any
+		want    float64
+		wantOK  bool
+	}{
+		{"float64", float64(42), 42, true},
+		{"string number", "42", 42, true},
+		{"string float", "3.14", 3.14, true},
+		{"int", int(7), 7, true},
+		{"int64", int64(99), 99, true},
+		{"empty string", "", 0, false},
+		{"non-numeric string", "abc", 0, false},
+		{"bool", true, 0, false},
+		{"nil", nil, 0, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := toFloat64(tt.input)
+			if ok != tt.wantOK {
+				t.Errorf("toFloat64(%v) ok = %v, want %v", tt.input, ok, tt.wantOK)
+			}
+			if ok && got != tt.want {
+				t.Errorf("toFloat64(%v) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
 	}
 }
 

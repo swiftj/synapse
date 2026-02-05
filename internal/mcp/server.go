@@ -10,11 +10,56 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/swiftj/synapse/internal/storage"
 	"github.com/swiftj/synapse/pkg/types"
 )
+
+// toFloat64 extracts a numeric value from an argument that may arrive as
+// float64 (standard JSON number) or string (common LLM agent behavior).
+func toFloat64(v any) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case string:
+		f, err := strconv.ParseFloat(n, 64)
+		return f, err == nil
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case json.Number:
+		f, err := n.Float64()
+		return f, err == nil
+	default:
+		return 0, false
+	}
+}
+
+// requireID extracts a required integer ID from args, returning a clear error
+// message if missing or invalid.
+func requireID(args map[string]any, key string) (int, error) {
+	v, exists := args[key]
+	if !exists {
+		return 0, fmt.Errorf("%s is required", key)
+	}
+	f, ok := toFloat64(v)
+	if !ok {
+		return 0, fmt.Errorf("%s must be a number, got %T: %v", key, v, v)
+	}
+	return int(f), nil
+}
+
+// optionalFloat64 extracts an optional numeric value from args.
+func optionalFloat64(args map[string]any, key string) (float64, bool) {
+	v, exists := args[key]
+	if !exists {
+		return 0, false
+	}
+	return toFloat64(v)
+}
 
 // Server implements an MCP server over stdio using JSON-RPC 2.0.
 type Server struct {
@@ -622,21 +667,21 @@ func (s *Server) createTask(args map[string]any) (toolCallResult, error) {
 	}
 
 	// Set optional fields
-	if priority, ok := args["priority"].(float64); ok {
+	if priority, ok := optionalFloat64(args, "priority"); ok {
 		syn.Priority = int(priority)
 	}
 
 	if blockedByRaw, ok := args["blocked_by"].([]any); ok {
 		blockedBy := make([]int, 0, len(blockedByRaw))
 		for _, v := range blockedByRaw {
-			if id, ok := v.(float64); ok {
+			if id, ok := toFloat64(v); ok {
 				blockedBy = append(blockedBy, int(id))
 			}
 		}
 		syn.BlockedBy = blockedBy
 	}
 
-	if parentID, ok := args["parent_id"].(float64); ok {
+	if parentID, ok := optionalFloat64(args, "parent_id"); ok {
 		syn.ParentID = int(parentID)
 	}
 
@@ -644,7 +689,7 @@ func (s *Server) createTask(args map[string]any) (toolCallResult, error) {
 		syn.Assignee = assignee
 	}
 
-	if discoveredFrom, ok := args["discovered_from"].(float64); ok {
+	if discoveredFrom, ok := optionalFloat64(args, "discovered_from"); ok {
 		syn.DiscoveredFrom = fmt.Sprintf("#%d", int(discoveredFrom))
 	}
 
@@ -676,12 +721,12 @@ func (s *Server) createTask(args map[string]any) (toolCallResult, error) {
 }
 
 func (s *Server) updateTask(args map[string]any) (toolCallResult, error) {
-	id, ok := args["id"].(float64)
-	if !ok {
-		return toolCallResult{}, fmt.Errorf("id is required")
+	id, err := requireID(args, "id")
+	if err != nil {
+		return toolCallResult{}, err
 	}
 
-	syn, err := s.store.Get(int(id))
+	syn, err := s.store.Get(id)
 	if err != nil {
 		return toolCallResult{}, err
 	}
@@ -694,7 +739,7 @@ func (s *Server) updateTask(args map[string]any) (toolCallResult, error) {
 		syn.Status = newStatus
 	}
 
-	if priority, ok := args["priority"].(float64); ok {
+	if priority, ok := optionalFloat64(args, "priority"); ok {
 		syn.Priority = int(priority)
 	}
 
@@ -705,7 +750,7 @@ func (s *Server) updateTask(args map[string]any) (toolCallResult, error) {
 	if blockedByRaw, ok := args["blocked_by"].([]any); ok {
 		blockedBy := make([]int, 0, len(blockedByRaw))
 		for _, v := range blockedByRaw {
-			if bid, ok := v.(float64); ok {
+			if bid, ok := toFloat64(v); ok {
 				blockedBy = append(blockedBy, int(bid))
 			}
 		}
@@ -740,12 +785,12 @@ func (s *Server) updateTask(args map[string]any) (toolCallResult, error) {
 }
 
 func (s *Server) getTask(args map[string]any) (toolCallResult, error) {
-	id, ok := args["id"].(float64)
-	if !ok {
-		return toolCallResult{}, fmt.Errorf("id is required")
+	id, err := requireID(args, "id")
+	if err != nil {
+		return toolCallResult{}, err
 	}
 
-	syn, err := s.store.Get(int(id))
+	syn, err := s.store.Get(id)
 	if err != nil {
 		return toolCallResult{}, err
 	}
@@ -777,17 +822,17 @@ func (s *Server) listTasks(args map[string]any) (toolCallResult, error) {
 
 	// Apply pagination
 	limit := 20
-	if l, ok := args["limit"].(float64); ok && l > 0 {
+	if l, ok := optionalFloat64(args, "limit"); ok && l > 0 {
 		limit = int(l)
 	}
 	offset := 0
-	if o, ok := args["offset"].(float64); ok && o >= 0 {
+	if o, ok := optionalFloat64(args, "offset"); ok && o >= 0 {
 		offset = int(o)
 	}
 
 	// Response size limit (caller can override)
 	maxChars := MaxResponseSize
-	if mc, ok := args["max_chars"].(float64); ok && mc > 0 {
+	if mc, ok := optionalFloat64(args, "max_chars"); ok && mc > 0 {
 		maxChars = int(mc)
 	}
 
@@ -1016,12 +1061,12 @@ func (s *Server) getNextTask(args map[string]any) (toolCallResult, error) {
 }
 
 func (s *Server) completeTask(args map[string]any) (toolCallResult, error) {
-	id, ok := args["id"].(float64)
-	if !ok {
-		return toolCallResult{}, fmt.Errorf("id is required")
+	id, err := requireID(args, "id")
+	if err != nil {
+		return toolCallResult{}, err
 	}
 
-	syn, err := s.store.Get(int(id))
+	syn, err := s.store.Get(id)
 	if err != nil {
 		return toolCallResult{}, err
 	}
@@ -1046,9 +1091,9 @@ func (s *Server) completeTask(args map[string]any) (toolCallResult, error) {
 }
 
 func (s *Server) spawnTask(args map[string]any) (toolCallResult, error) {
-	parentID, ok := args["parent_task_id"].(float64)
-	if !ok {
-		return toolCallResult{}, fmt.Errorf("parent_task_id is required")
+	parentID, err := requireID(args, "parent_task_id")
+	if err != nil {
+		return toolCallResult{}, err
 	}
 
 	title, ok := args["title"].(string)
@@ -1057,7 +1102,7 @@ func (s *Server) spawnTask(args map[string]any) (toolCallResult, error) {
 	}
 
 	// Verify parent exists
-	_, err := s.store.Get(int(parentID))
+	_, err = s.store.Get(parentID)
 	if err != nil {
 		return toolCallResult{}, fmt.Errorf("parent task not found: %w", err)
 	}
@@ -1067,11 +1112,11 @@ func (s *Server) spawnTask(args map[string]any) (toolCallResult, error) {
 		return toolCallResult{}, err
 	}
 
-	syn.DiscoveredFrom = fmt.Sprintf("#%d", int(parentID))
-	syn.ParentID = int(parentID)
+	syn.DiscoveredFrom = fmt.Sprintf("#%d", parentID)
+	syn.ParentID = parentID
 
 	if blockedByParent, ok := args["blocked_by_parent"].(bool); ok && blockedByParent {
-		syn.BlockedBy = []int{int(parentID)}
+		syn.BlockedBy = []int{parentID}
 		syn.Status = types.StatusBlocked
 	}
 
@@ -1093,9 +1138,9 @@ func (s *Server) spawnTask(args map[string]any) (toolCallResult, error) {
 }
 
 func (s *Server) addNote(args map[string]any) (toolCallResult, error) {
-	id, ok := args["id"].(float64)
-	if !ok {
-		return toolCallResult{}, fmt.Errorf("id is required")
+	id, err := requireID(args, "id")
+	if err != nil {
+		return toolCallResult{}, err
 	}
 
 	note, ok := args["note"].(string)
@@ -1103,7 +1148,7 @@ func (s *Server) addNote(args map[string]any) (toolCallResult, error) {
 		return toolCallResult{}, fmt.Errorf("note is required")
 	}
 
-	syn, err := s.store.Get(int(id))
+	syn, err := s.store.Get(id)
 	if err != nil {
 		return toolCallResult{}, err
 	}
@@ -1139,7 +1184,7 @@ func (s *Server) setBreadcrumb(args map[string]any) (toolCallResult, error) {
 	}
 
 	var taskID int
-	if tid, ok := args["task_id"].(float64); ok {
+	if tid, ok := optionalFloat64(args, "task_id"); ok {
 		taskID = int(tid)
 	}
 
@@ -1207,7 +1252,7 @@ func (s *Server) getBreadcrumb(args map[string]any) (toolCallResult, error) {
 func (s *Server) listBreadcrumbs(args map[string]any) (toolCallResult, error) {
 	var breadcrumbs []*types.Breadcrumb
 
-	if taskID, ok := args["task_id"].(float64); ok {
+	if taskID, ok := optionalFloat64(args, "task_id"); ok {
 		breadcrumbs = s.bcStore.ListByTask(int(taskID))
 	} else if prefix, ok := args["prefix"].(string); ok {
 		breadcrumbs = s.bcStore.List(prefix)
@@ -1255,9 +1300,9 @@ func (s *Server) deleteBreadcrumb(args map[string]any) (toolCallResult, error) {
 }
 
 func (s *Server) claimTask(args map[string]any) (toolCallResult, error) {
-	id, ok := args["id"].(float64)
-	if !ok {
-		return toolCallResult{}, fmt.Errorf("id is required")
+	id, err := requireID(args, "id")
+	if err != nil {
+		return toolCallResult{}, err
 	}
 
 	agentID, ok := args["agent_id"].(string)
@@ -1266,11 +1311,11 @@ func (s *Server) claimTask(args map[string]any) (toolCallResult, error) {
 	}
 
 	timeout := types.DefaultClaimTimeout
-	if minutes, ok := args["timeout_minutes"].(float64); ok {
+	if minutes, ok := optionalFloat64(args, "timeout_minutes"); ok {
 		timeout = time.Duration(minutes) * time.Minute
 	}
 
-	syn, err := s.store.Get(int(id))
+	syn, err := s.store.Get(id)
 	if err != nil {
 		return toolCallResult{}, err
 	}
@@ -1311,12 +1356,12 @@ func (s *Server) claimTask(args map[string]any) (toolCallResult, error) {
 }
 
 func (s *Server) releaseClaim(args map[string]any) (toolCallResult, error) {
-	id, ok := args["id"].(float64)
-	if !ok {
-		return toolCallResult{}, fmt.Errorf("id is required")
+	id, err := requireID(args, "id")
+	if err != nil {
+		return toolCallResult{}, err
 	}
 
-	syn, err := s.store.Get(int(id))
+	syn, err := s.store.Get(id)
 	if err != nil {
 		return toolCallResult{}, err
 	}
@@ -1341,9 +1386,9 @@ func (s *Server) releaseClaim(args map[string]any) (toolCallResult, error) {
 }
 
 func (s *Server) completeTaskAs(args map[string]any) (toolCallResult, error) {
-	id, ok := args["id"].(float64)
-	if !ok {
-		return toolCallResult{}, fmt.Errorf("id is required")
+	id, err := requireID(args, "id")
+	if err != nil {
+		return toolCallResult{}, err
 	}
 
 	agentID, ok := args["agent_id"].(string)
@@ -1351,7 +1396,7 @@ func (s *Server) completeTaskAs(args map[string]any) (toolCallResult, error) {
 		return toolCallResult{}, fmt.Errorf("agent_id is required")
 	}
 
-	syn, err := s.store.Get(int(id))
+	syn, err := s.store.Get(id)
 	if err != nil {
 		return toolCallResult{}, err
 	}
@@ -1377,7 +1422,7 @@ func (s *Server) completeTaskAs(args map[string]any) (toolCallResult, error) {
 
 func (s *Server) getContextWindow(args map[string]any) (toolCallResult, error) {
 	minutes := 60.0
-	if m, ok := args["minutes"].(float64); ok {
+	if m, ok := optionalFloat64(args, "minutes"); ok {
 		minutes = m
 	}
 
@@ -1491,18 +1536,18 @@ func (s *Server) deleteTask(args map[string]any) (toolCallResult, error) {
 	}
 
 	// Delete single task by ID
-	id, ok := args["id"].(float64)
-	if !ok {
+	id, err := requireID(args, "id")
+	if err != nil {
 		return toolCallResult{}, fmt.Errorf("id is required (or set delete_all or delete_completed to true)")
 	}
 
-	syn, err := s.store.Get(int(id))
+	syn, err := s.store.Get(id)
 	if err != nil {
 		return toolCallResult{}, err
 	}
 
 	title := syn.Title
-	if err := s.store.Delete(int(id)); err != nil {
+	if err := s.store.Delete(id); err != nil {
 		return toolCallResult{}, err
 	}
 
@@ -1513,7 +1558,7 @@ func (s *Server) deleteTask(args map[string]any) (toolCallResult, error) {
 	return toolCallResult{
 		Content: []toolContent{{
 			Type: "text",
-			Text: fmt.Sprintf("Deleted task #%d: %s", int(id), title),
+			Text: fmt.Sprintf("Deleted task #%d: %s", id, title),
 		}},
 	}, nil
 }
