@@ -1,21 +1,34 @@
 #!/bin/bash
-# Post-commit hook: Auto-tag and release after version bump
+# Post-commit hook: Auto-bump version, tag, and release
+#
+# This hook handles ALL version management because:
+#   - pre-commit can stage files but can't read the commit message
+#   - prepare-commit-msg can read the message but can't stage files
+#   - post-commit can read the message AND amend the version into the commit
 #
 # Behavior:
 #   - Only runs on main/master branch
-#   - Only creates release if version was bumped in this commit
-#   - Auto-releases for [minor] and [major] bumps
-#   - Use [release] in commit msg to force release on patch bumps
-#   - Use [skip-release] to skip release even on minor/major
+#   - Only bumps if .go files were changed in the commit
+#   - Default: Bumps patch version (1.0.0 -> 1.0.1)
+#   - [minor] in commit msg: Bumps minor (1.0.0 -> 1.1.0)
+#   - [major] in commit msg: Bumps major (1.0.0 -> 2.0.0)
+#   - [skip-version] in commit msg: Skip version bump entirely
+#   - [release] in commit msg: Create GitHub release for patch bumps
+#   - [skip-release] in commit msg: Skip GitHub release
 #
 # Requirements:
-#   - gh CLI installed and authenticated
+#   - gh CLI installed and authenticated (for releases)
 #   - Push access to repository
 #
 # Location: scripts/hooks/post-commit
 
 VERSION_FILE="cmd/synapse/main.go"
-RELEASE_NOTES_FILE=".git/RELEASE_NOTES"
+GUARD_FILE=".git/VERSION_BUMPING"
+
+# ── Re-entrance guard (amend triggers post-commit again) ──
+if [[ -f "$GUARD_FILE" ]]; then
+    exit 0
+fi
 
 # Only run on main/master branch
 CURRENT_BRANCH=$(git branch --show-current)
@@ -23,23 +36,112 @@ if [[ "$CURRENT_BRANCH" != "main" && "$CURRENT_BRANCH" != "master" ]]; then
     exit 0
 fi
 
-# Check if gh CLI is available
-if ! command -v gh &> /dev/null; then
-    echo "Note: gh CLI not found, skipping auto-release"
+# Read commit message
+COMMIT_MSG=$(git log -1 --pretty=%B)
+
+# Check for skip-version
+if echo "$COMMIT_MSG" | grep -qi '\[skip-version\]'; then
+    echo "Version bump skipped ([skip-version] detected)"
     exit 0
 fi
 
-# Check if version file was modified in this commit
-if ! git diff-tree --no-commit-id --name-only -r HEAD | grep -q "^${VERSION_FILE}$"; then
+# Only bump for commits that include .go file changes
+if ! git diff-tree --no-commit-id --name-only -r HEAD | grep -q "\.go$"; then
     exit 0
 fi
 
-# Get the new version from the committed file
-NEW_VERSION=$(grep -E '^const version = "[0-9]+\.[0-9]+\.[0-9]+"' "$VERSION_FILE" | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
-
-if [[ -z "$NEW_VERSION" ]]; then
+# Don't bump if the only .go change is the version file itself (manual correction)
+GO_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD | grep "\.go$" | grep -v "^${VERSION_FILE}$")
+if [[ -z "$GO_FILES" ]]; then
+    # Version file was already in the commit (manual bump) — skip to tagging
+    NEW_VERSION=$(grep -E '^const version = "[0-9]+\.[0-9]+\.[0-9]+"' "$VERSION_FILE" | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
+    if [[ -n "$NEW_VERSION" ]]; then
+        # Jump to tagging
+        TAG_NAME="v${NEW_VERSION}"
+        if ! git tag -l "$TAG_NAME" | grep -q "$TAG_NAME"; then
+            COMMIT_SUBJECT=$(git log -1 --pretty=%s)
+            git tag -a "$TAG_NAME" -m "$TAG_NAME: $COMMIT_SUBJECT"
+            echo "Created tag: $TAG_NAME"
+            git push origin "$TAG_NAME" 2>/dev/null && echo "Pushed tag: $TAG_NAME"
+        fi
+    fi
     exit 0
 fi
+
+# Check if version file exists
+if [[ ! -f "$VERSION_FILE" ]]; then
+    exit 0
+fi
+
+# ── Version bump ──
+
+# Extract current version
+CURRENT_VERSION=$(grep -E '^const version = "[0-9]+\.[0-9]+\.[0-9]+"' "$VERSION_FILE" | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
+if [[ -z "$CURRENT_VERSION" ]]; then
+    exit 0
+fi
+
+# Determine bump type
+BUMP_TYPE="patch"
+if echo "$COMMIT_MSG" | grep -qi '\[major\]'; then
+    BUMP_TYPE="major"
+elif echo "$COMMIT_MSG" | grep -qi '\[minor\]'; then
+    BUMP_TYPE="minor"
+fi
+
+# Parse and calculate new version
+MAJOR=$(echo "$CURRENT_VERSION" | cut -d. -f1)
+MINOR=$(echo "$CURRENT_VERSION" | cut -d. -f2)
+PATCH=$(echo "$CURRENT_VERSION" | cut -d. -f3)
+
+case "$BUMP_TYPE" in
+    major)
+        NEW_MAJOR=$((MAJOR + 1))
+        NEW_MINOR=0
+        NEW_PATCH=0
+        ;;
+    minor)
+        NEW_MAJOR=$MAJOR
+        NEW_MINOR=$((MINOR + 1))
+        NEW_PATCH=0
+        ;;
+    patch|*)
+        NEW_MAJOR=$MAJOR
+        NEW_MINOR=$MINOR
+        NEW_PATCH=$((PATCH + 1))
+        ;;
+esac
+
+NEW_VERSION="${NEW_MAJOR}.${NEW_MINOR}.${NEW_PATCH}"
+
+# Update version file
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -i '' "s/const version = \"$CURRENT_VERSION\"/const version = \"$NEW_VERSION\"/" "$VERSION_FILE"
+else
+    sed -i "s/const version = \"$CURRENT_VERSION\"/const version = \"$NEW_VERSION\"/" "$VERSION_FILE"
+fi
+
+# Update README badge if exists
+README_FILE="README.md"
+if [[ -f "$README_FILE" ]]; then
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "s/VERSION-$CURRENT_VERSION-/VERSION-$NEW_VERSION-/" "$README_FILE"
+    else
+        sed -i "s/VERSION-$CURRENT_VERSION-/VERSION-$NEW_VERSION-/" "$README_FILE"
+    fi
+    git add "$README_FILE"
+fi
+
+# Amend the commit to include the version bump
+# The guard file prevents this amend from triggering another post-commit cycle
+touch "$GUARD_FILE"
+git add "$VERSION_FILE"
+git commit --amend --no-edit --no-verify
+rm -f "$GUARD_FILE"
+
+echo "Version bumped ($BUMP_TYPE): $CURRENT_VERSION -> $NEW_VERSION"
+
+# ── Tagging and release ──
 
 TAG_NAME="v${NEW_VERSION}"
 
@@ -48,18 +150,30 @@ if git tag -l "$TAG_NAME" | grep -q "$TAG_NAME"; then
     exit 0
 fi
 
-# Get the commit message to check for keywords
-COMMIT_MSG=$(git log -1 --pretty=%B)
+COMMIT_SUBJECT=$(git log -1 --pretty=%s)
+git tag -a "$TAG_NAME" -m "$TAG_NAME: $COMMIT_SUBJECT"
 
-# Check for skip-release
+if [[ $? -ne 0 ]]; then
+    echo "Warning: Failed to create tag $TAG_NAME"
+    exit 0
+fi
+echo "Created tag: $TAG_NAME"
+
+git push origin "$TAG_NAME" 2>/dev/null
+if [[ $? -ne 0 ]]; then
+    echo "Warning: Failed to push tag $TAG_NAME (will need manual push)"
+    exit 0
+fi
+echo "Pushed tag: $TAG_NAME"
+
+# Determine if we should create a GitHub release
+SHOULD_RELEASE=false
+RELEASE_TYPE="patch"
+
 if echo "$COMMIT_MSG" | grep -qi '\[skip-release\]'; then
     echo "Release skipped ([skip-release] detected)"
     exit 0
 fi
-
-# Determine if we should release
-SHOULD_RELEASE=false
-RELEASE_TYPE="patch"
 
 if echo "$COMMIT_MSG" | grep -qi '\[major\]'; then
     SHOULD_RELEASE=true
@@ -72,44 +186,19 @@ elif echo "$COMMIT_MSG" | grep -qi '\[release\]'; then
     RELEASE_TYPE="patch"
 fi
 
-# For now, always create tag but only release for minor/major or explicit [release]
-# Create annotated tag
-COMMIT_SUBJECT=$(git log -1 --pretty=%s)
-git tag -a "$TAG_NAME" -m "$TAG_NAME: $COMMIT_SUBJECT"
-
-if [[ $? -ne 0 ]]; then
-    echo "Warning: Failed to create tag $TAG_NAME"
-    exit 0
-fi
-
-echo "Created tag: $TAG_NAME"
-
-# Push the tag
-git push origin "$TAG_NAME" 2>/dev/null
-
-if [[ $? -ne 0 ]]; then
-    echo "Warning: Failed to push tag $TAG_NAME (will need manual push)"
-    exit 0
-fi
-
-echo "Pushed tag: $TAG_NAME"
-
-# Create GitHub release if appropriate
 if [[ "$SHOULD_RELEASE" == "true" ]]; then
-    # Generate release title based on type
+    # Check if gh CLI is available
+    if ! command -v gh &> /dev/null; then
+        echo "Note: gh CLI not found, skipping GitHub release"
+        exit 0
+    fi
+
     case "$RELEASE_TYPE" in
-        major)
-            RELEASE_TITLE="$TAG_NAME - Major Release"
-            ;;
-        minor)
-            RELEASE_TITLE="$TAG_NAME - Feature Release"
-            ;;
-        *)
-            RELEASE_TITLE="$TAG_NAME"
-            ;;
+        major) RELEASE_TITLE="$TAG_NAME - Major Release" ;;
+        minor) RELEASE_TITLE="$TAG_NAME - Feature Release" ;;
+        *)     RELEASE_TITLE="$TAG_NAME" ;;
     esac
 
-    # Generate release notes from commit message
     RELEASE_BODY=$(cat <<EOF
 ## Changes
 
