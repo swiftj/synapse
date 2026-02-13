@@ -1,12 +1,117 @@
 #!/bin/bash
-# Prepare-commit-msg hook
+# Prepare-commit-msg hook: Auto-increment SemVer version
 #
-# Reserved for future commit message formatting.
-# Version keyword parsing ([minor], [major], [skip-version]) is handled
-# directly by the pre-commit hook via .git/COMMIT_EDITMSG.
+# This hook has access to the actual commit message via $1, unlike
+# pre-commit which runs before COMMIT_EDITMSG is written.
+#
+# Behavior:
+#   - Default: Bumps patch version (1.0.0 -> 1.0.1)
+#   - [minor] in commit msg: Bumps minor (1.0.0 -> 1.1.0)
+#   - [major] in commit msg: Bumps major (1.0.0 -> 2.0.0)
+#   - [skip-version] in commit msg: Skip version bump
+#
+# Updates:
+#   - cmd/synapse/main.go (const version)
+#   - README.md (VERSION badge)
 #
 # Install: Run ./scripts/install-hooks.sh
 # Location: scripts/hooks/prepare-commit-msg
 
+COMMIT_MSG_FILE="$1"
+VERSION_FILE="cmd/synapse/main.go"
+README_FILE="README.md"
+
 # Clean up any stale VERSION_BUMP_TYPE files from old hook versions
 rm -f ".git/VERSION_BUMP_TYPE"
+
+# Check if version file exists
+if [[ ! -f "$VERSION_FILE" ]]; then
+    echo "Warning: Version file not found at $VERSION_FILE"
+    exit 0
+fi
+
+# Check if this is a merge commit (skip version bump)
+if [[ -f ".git/MERGE_HEAD" ]]; then
+    exit 0
+fi
+
+# Check if Go files are staged (only bump for code changes)
+if ! git diff --cached --name-only | grep -q "\.go$"; then
+    exit 0
+fi
+
+# Read the actual commit message
+if [[ ! -f "$COMMIT_MSG_FILE" ]]; then
+    exit 0
+fi
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Check for skip-version
+if echo "$COMMIT_MSG" | grep -qi '\[skip-version\]'; then
+    echo "Version bump skipped ([skip-version] detected)"
+    exit 0
+fi
+
+# Determine bump type from commit message
+BUMP_TYPE="patch"
+if echo "$COMMIT_MSG" | grep -qi '\[major\]'; then
+    BUMP_TYPE="major"
+elif echo "$COMMIT_MSG" | grep -qi '\[minor\]'; then
+    BUMP_TYPE="minor"
+fi
+
+# Extract current version
+CURRENT_VERSION=$(grep -E '^const version = "[0-9]+\.[0-9]+\.[0-9]+"' "$VERSION_FILE" | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
+
+if [[ -z "$CURRENT_VERSION" ]]; then
+    echo "Warning: Could not extract version from $VERSION_FILE"
+    exit 0
+fi
+
+# Parse version components
+MAJOR=$(echo "$CURRENT_VERSION" | cut -d. -f1)
+MINOR=$(echo "$CURRENT_VERSION" | cut -d. -f2)
+PATCH=$(echo "$CURRENT_VERSION" | cut -d. -f3)
+
+# Calculate new version based on bump type
+case "$BUMP_TYPE" in
+    major)
+        NEW_MAJOR=$((MAJOR + 1))
+        NEW_MINOR=0
+        NEW_PATCH=0
+        ;;
+    minor)
+        NEW_MAJOR=$MAJOR
+        NEW_MINOR=$((MINOR + 1))
+        NEW_PATCH=0
+        ;;
+    patch|*)
+        NEW_MAJOR=$MAJOR
+        NEW_MINOR=$MINOR
+        NEW_PATCH=$((PATCH + 1))
+        ;;
+esac
+
+NEW_VERSION="${NEW_MAJOR}.${NEW_MINOR}.${NEW_PATCH}"
+
+# Update the version file (main.go)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -i '' "s/const version = \"$CURRENT_VERSION\"/const version = \"$NEW_VERSION\"/" "$VERSION_FILE"
+else
+    sed -i "s/const version = \"$CURRENT_VERSION\"/const version = \"$NEW_VERSION\"/" "$VERSION_FILE"
+fi
+
+# Update README badge if exists
+if [[ -f "$README_FILE" ]]; then
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "s/VERSION-$CURRENT_VERSION-/VERSION-$NEW_VERSION-/" "$README_FILE"
+    else
+        sed -i "s/VERSION-$CURRENT_VERSION-/VERSION-$NEW_VERSION-/" "$README_FILE"
+    fi
+    git add "$README_FILE"
+fi
+
+# Stage the updated version file
+git add "$VERSION_FILE"
+
+echo "Version bumped ($BUMP_TYPE): $CURRENT_VERSION -> $NEW_VERSION"

@@ -1,111 +1,12 @@
 #!/bin/bash
-# Pre-commit hook: Auto-increment SemVer version
+# Pre-commit hook: Code quality checks
 #
-# Reads commit message directly from .git/COMMIT_EDITMSG (populated by
-# git before any hooks run). No dependency on other hooks.
-#
-# Behavior:
-#   - Default: Bumps patch version (0.3.2 -> 0.3.3)
-#   - [minor] in commit msg: Bumps minor (0.3.2 -> 0.4.0)
-#   - [major] in commit msg: Bumps major (0.3.2 -> 1.0.0)
-#   - [skip-version] in commit msg: Skip version bump
-#
-# Updates:
-#   - cmd/synapse/main.go (const version)
-#   - README.md (VERSION badge)
+# NOTE: Version bumping was moved to prepare-commit-msg because
+# pre-commit runs BEFORE Git writes COMMIT_EDITMSG, so it cannot
+# reliably read the current commit message.
 #
 # Install: Run ./scripts/install-hooks.sh
 # Location: scripts/hooks/pre-commit
 
-VERSION_FILE="cmd/synapse/main.go"
-README_FILE="README.md"
-COMMIT_MSG_FILE=".git/COMMIT_EDITMSG"
-
-# Check if version file exists
-if [[ ! -f "$VERSION_FILE" ]]; then
-    echo "Warning: Version file not found at $VERSION_FILE"
-    exit 0
-fi
-
-# Check if this is a merge commit (skip version bump)
-if [[ -f ".git/MERGE_HEAD" ]]; then
-    exit 0
-fi
-
-# Check if Go files are staged (only bump for code changes)
-if ! git diff --cached --name-only | grep -q "\.go$"; then
-    exit 0
-fi
-
-# Determine bump type from commit message
-BUMP_TYPE="patch"
-if [[ -f "$COMMIT_MSG_FILE" ]]; then
-    COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
-
-    if echo "$COMMIT_MSG" | grep -qi '\[skip-version\]'; then
-        echo "Version bump skipped ([skip-version] detected)"
-        exit 0
-    fi
-
-    if echo "$COMMIT_MSG" | grep -qi '\[major\]'; then
-        BUMP_TYPE="major"
-    elif echo "$COMMIT_MSG" | grep -qi '\[minor\]'; then
-        BUMP_TYPE="minor"
-    fi
-fi
-
-# Extract current version
-CURRENT_VERSION=$(grep -E '^const version = "[0-9]+\.[0-9]+\.[0-9]+"' "$VERSION_FILE" | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
-
-if [[ -z "$CURRENT_VERSION" ]]; then
-    echo "Warning: Could not extract version from $VERSION_FILE"
-    exit 0
-fi
-
-# Parse version components
-MAJOR=$(echo "$CURRENT_VERSION" | cut -d. -f1)
-MINOR=$(echo "$CURRENT_VERSION" | cut -d. -f2)
-PATCH=$(echo "$CURRENT_VERSION" | cut -d. -f3)
-
-# Calculate new version based on bump type
-case "$BUMP_TYPE" in
-    major)
-        NEW_MAJOR=$((MAJOR + 1))
-        NEW_MINOR=0
-        NEW_PATCH=0
-        ;;
-    minor)
-        NEW_MAJOR=$MAJOR
-        NEW_MINOR=$((MINOR + 1))
-        NEW_PATCH=0
-        ;;
-    patch|*)
-        NEW_MAJOR=$MAJOR
-        NEW_MINOR=$MINOR
-        NEW_PATCH=$((PATCH + 1))
-        ;;
-esac
-
-NEW_VERSION="${NEW_MAJOR}.${NEW_MINOR}.${NEW_PATCH}"
-
-# Update the version file (main.go)
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' "s/const version = \"$CURRENT_VERSION\"/const version = \"$NEW_VERSION\"/" "$VERSION_FILE"
-else
-    sed -i "s/const version = \"$CURRENT_VERSION\"/const version = \"$NEW_VERSION\"/" "$VERSION_FILE"
-fi
-
-# Update README badge if exists
-if [[ -f "$README_FILE" ]]; then
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s/VERSION-$CURRENT_VERSION-/VERSION-$NEW_VERSION-/" "$README_FILE"
-    else
-        sed -i "s/VERSION-$CURRENT_VERSION-/VERSION-$NEW_VERSION-/" "$README_FILE"
-    fi
-    git add "$README_FILE"
-fi
-
-# Stage the updated version file
-git add "$VERSION_FILE"
-
-echo "Version bumped ($BUMP_TYPE): $CURRENT_VERSION -> $NEW_VERSION"
+# Reserved for lint, format, or test checks
+exit 0
