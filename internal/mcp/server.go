@@ -39,9 +39,13 @@ func toFloat64(v any) (float64, bool) {
 }
 
 // requireID extracts a required integer ID from args, returning a clear error
-// message if missing or invalid.
+// message if missing or invalid. When key is "id", it also accepts "task_id"
+// as a fallback to handle LLM parameter name variations.
 func requireID(args map[string]any, key string) (int, error) {
 	v, exists := args[key]
+	if !exists && key == "id" {
+		v, exists = args["task_id"]
+	}
 	if !exists {
 		return 0, fmt.Errorf("%s is required", key)
 	}

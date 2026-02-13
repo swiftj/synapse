@@ -263,6 +263,24 @@ func TestStringTypedParameters(t *testing.T) {
 			t.Errorf("expected 'required' error message, got: %s", err.Error())
 		}
 	})
+
+	// Test: task_id accepted as alias for id (LLM parameter name variation)
+	t.Run("add_note accepts task_id as alias for id", func(t *testing.T) {
+		// Create a fresh task for this test
+		syn2, _ := store.Create("Note test task")
+		store.Save()
+
+		result, err := server.addNote(map[string]any{
+			"task_id": float64(syn2.ID),
+			"note":    "test note via task_id alias",
+		})
+		if err != nil {
+			t.Fatalf("add_note with task_id alias failed: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("add_note returned error: %s", result.Content[0].Text)
+		}
+	})
 }
 
 func TestToFloat64(t *testing.T) {
