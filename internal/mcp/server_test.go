@@ -19,13 +19,13 @@ func TestListTasks_ResponseSizeLimiting(t *testing.T) {
 
 	// Create tasks with large notes to exceed the size limit
 	largeNote := strings.Repeat("This is a very long note that takes up space. ", 100)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		syn, err := store.Create("Task with large notes")
 		if err != nil {
 			t.Fatalf("failed to create task: %v", err)
 		}
 		// Add multiple large notes
-		for j := 0; j < 10; j++ {
+		for range 10 {
 			syn.AddNote(largeNote)
 		}
 		if err := store.Update(syn); err != nil {
