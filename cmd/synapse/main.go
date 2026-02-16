@@ -12,12 +12,13 @@ import (
 	"strings"
 
 	"github.com/swiftj/synapse/internal/mcp"
+	"github.com/swiftj/synapse/internal/skill"
 	"github.com/swiftj/synapse/internal/storage"
 	"github.com/swiftj/synapse/internal/view"
 	"github.com/swiftj/synapse/pkg/types"
 )
 
-const version = "1.0.4"
+const version = "1.0.5"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -49,6 +50,8 @@ func main() {
 		cmdDelete(args)
 	case "breadcrumb", "bc":
 		cmdBreadcrumb(args)
+	case "skill":
+		cmdSkill(args)
 	case "serve":
 		cmdServe()
 	case "view":
@@ -100,6 +103,15 @@ Commands:
       list [prefix]       List breadcrumbs (optionally filter by prefix)
           --json          Output as JSON
       delete <key>        Delete a breadcrumb
+  skill             Manage agentic skill installations
+      install <agent>   Install skill for an agent
+          --level L     Install level: user or project (default: project)
+      uninstall <agent> Remove skill for an agent
+          --level L     Install level: user or project (default: project)
+      list              Show installation status for all agents
+      update [agent]    Update installed skill(s)
+          --level L     Install level: user or project (default: project)
+      show              Print the embedded SKILL.md content
   serve             Start MCP server (JSON-RPC over stdio)
   view              Start visualization web server
       --port N      Port to listen on (default: 8080)
@@ -769,6 +781,189 @@ func cmdBreadcrumbDelete(args []string) {
 
 	saveBreadcrumbStore(store)
 	fmt.Printf("Deleted breadcrumb: %s\n", key)
+}
+
+func cmdSkill(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "error: subcommand required (install, uninstall, list, update, show)")
+		os.Exit(1)
+	}
+
+	subcmd := args[0]
+	subargs := args[1:]
+
+	switch subcmd {
+	case "install":
+		cmdSkillInstall(subargs)
+	case "uninstall":
+		cmdSkillUninstall(subargs)
+	case "list", "ls":
+		cmdSkillList()
+	case "update":
+		cmdSkillUpdate(subargs)
+	case "show":
+		cmdSkillShow()
+	default:
+		fmt.Fprintf(os.Stderr, "error: unknown skill subcommand: %s\n", subcmd)
+		os.Exit(1)
+	}
+}
+
+func cmdSkillInstall(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "error: agent name required")
+		fmt.Fprintf(os.Stderr, "available agents: %s\n", strings.Join(skill.AgentNames(), ", "))
+		os.Exit(1)
+	}
+
+	agentName := args[0]
+	level := skill.LevelProject
+
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--level" && i+1 < len(args) {
+			i++
+			switch args[i] {
+			case "user":
+				level = skill.LevelUser
+			case "project":
+				level = skill.LevelProject
+			default:
+				fmt.Fprintf(os.Stderr, "error: invalid level: %s (must be 'user' or 'project')\n", args[i])
+				os.Exit(1)
+			}
+		}
+	}
+
+	if err := skill.Install(agentName, level, version); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	cfg, _ := skill.GetAgent(agentName)
+	target := skill.TargetPath(cfg, level)
+	fmt.Printf("Installed synapse skill for %s (%s)\n", cfg.DisplayName, level)
+	fmt.Printf("  Path: %s\n", target)
+}
+
+func cmdSkillUninstall(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "error: agent name required")
+		fmt.Fprintf(os.Stderr, "available agents: %s\n", strings.Join(skill.AgentNames(), ", "))
+		os.Exit(1)
+	}
+
+	agentName := args[0]
+	level := skill.LevelProject
+
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--level" && i+1 < len(args) {
+			i++
+			switch args[i] {
+			case "user":
+				level = skill.LevelUser
+			case "project":
+				level = skill.LevelProject
+			default:
+				fmt.Fprintf(os.Stderr, "error: invalid level: %s (must be 'user' or 'project')\n", args[i])
+				os.Exit(1)
+			}
+		}
+	}
+
+	if err := skill.Uninstall(agentName, level); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	cfg, _ := skill.GetAgent(agentName)
+	fmt.Printf("Uninstalled synapse skill for %s (%s)\n", cfg.DisplayName, level)
+}
+
+func cmdSkillList() {
+	infos := skill.List()
+
+	fmt.Println("Synapse Skill Installations:")
+	fmt.Println()
+
+	lastAgent := ""
+	for _, info := range infos {
+		if info.Agent != lastAgent {
+			cfg, _ := skill.GetAgent(info.Agent)
+			fmt.Printf("  %s (%s):\n", cfg.DisplayName, info.Agent)
+			lastAgent = info.Agent
+		}
+
+		status := "not installed"
+		if info.Installed {
+			if info.Version != "" {
+				status = fmt.Sprintf("v%s", info.Version)
+			} else {
+				status = "installed"
+			}
+		}
+
+		fmt.Printf("    %-8s %s\n", info.Level+":", status)
+	}
+}
+
+func cmdSkillUpdate(args []string) {
+	level := skill.LevelProject
+	var agentName string
+
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--level" && i+1 < len(args) {
+			i++
+			switch args[i] {
+			case "user":
+				level = skill.LevelUser
+			case "project":
+				level = skill.LevelProject
+			default:
+				fmt.Fprintf(os.Stderr, "error: invalid level: %s (must be 'user' or 'project')\n", args[i])
+				os.Exit(1)
+			}
+		} else if !strings.HasPrefix(args[i], "--") {
+			agentName = args[i]
+		}
+	}
+
+	if agentName != "" {
+		// Update specific agent
+		if !skill.IsInstalled(agentName, level) {
+			fmt.Fprintf(os.Stderr, "error: %s is not installed at %s level\n", agentName, level)
+			os.Exit(1)
+		}
+		if err := skill.Update(agentName, level, version); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		cfg, _ := skill.GetAgent(agentName)
+		fmt.Printf("Updated synapse skill for %s (%s) to v%s\n", cfg.DisplayName, level, version)
+	} else {
+		// Update all installed
+		updated, err := skill.UpdateAll(version)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		if len(updated) == 0 {
+			fmt.Println("No installed skills to update")
+			return
+		}
+		fmt.Printf("Updated %d installation(s) to v%s:\n", len(updated), version)
+		for _, name := range updated {
+			fmt.Printf("  %s\n", name)
+		}
+	}
+}
+
+func cmdSkillShow() {
+	content, err := skill.ShowSkillContent(version)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Print(content)
 }
 
 func cmdServe() {
