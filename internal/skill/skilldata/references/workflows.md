@@ -131,6 +131,68 @@ set_breadcrumb("session.next_step", "Implement refresh token rotation")
 set_breadcrumb("session.files_modified", "internal/auth/handler.go, internal/auth/token.go")
 ```
 
+## Keeping Synapse Accurate
+
+Synapse should be the single source of truth for project progress. A new agent
+or human should be able to query `list_tasks` and `list_breadcrumbs` and
+immediately understand what's done, what's in flight, and what's next — without
+reading source code.
+
+### Plan Decomposition Pattern
+
+When given a multi-step plan or task list:
+
+```
+1. Create a task for EACH step before starting any work
+2. Set blocked_by relationships to encode the order
+3. Claim and start the first unblocked task
+4. Mark each task done IMMEDIATELY when finished
+5. Claim the next task before starting it
+
+Example:
+  create_task("Design schema", priority: 5)           → #10
+  create_task("Build API", blocked_by: [10])           → #11
+  create_task("Write tests", blocked_by: [11])         → #12
+  claim_task(10, "agent-1")
+  ... work on schema ...
+  complete_task(10)      ← do this NOW, not later
+  claim_task(11, "agent-1")
+  ... work on API ...
+```
+
+### Real-Time Status Updates
+
+Update status as events happen, not in batches:
+
+```
+Discovered a blocker?
+  → update_task(id, status: "blocked")
+  → add_note(id, "Blocked: missing API credentials")
+
+Made meaningful progress?
+  → add_note(id, "Completed: endpoints for /users and /auth")
+
+Need someone else to verify?
+  → update_task(id, status: "review")
+
+Found a new issue while working?
+  → spawn_task(current_id, "Fix edge case in validation")
+  ← Don't wait, log it immediately
+```
+
+### Progress Breadcrumbs
+
+At natural pause points, capture session state:
+
+```
+set_breadcrumb("session.current_task", "11")
+set_breadcrumb("session.progress", "API endpoints done, middleware next")
+set_breadcrumb("session.next_step", "Add auth middleware to router")
+set_breadcrumb("session.files_touched", "internal/api/handler.go, internal/api/routes.go")
+```
+
+This lets the next session resume instantly without re-reading code.
+
 ## Task Lifecycle Best Practices
 
 1. **Be specific in titles**: "Fix null pointer in auth middleware" not "Fix bug"

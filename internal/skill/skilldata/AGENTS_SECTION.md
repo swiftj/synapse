@@ -28,6 +28,14 @@ syn bc list [prefix]      # List breadcrumbs
 4. `syn done <id>` when finished
 5. Store context: `syn bc set session.last_file src/auth.go`
 
+## Status Discipline
+
+Keep Synapse accurate at all times so any agent can query it for current progress
+without scanning code. For multi-step plans, create a task for each step upfront.
+Claim tasks before starting, mark them done immediately when finished, and use
+`syn bc set session.progress "..."` at pause points. Synapse should always
+reflect reality.
+
 ## Status Values
 
 `open` → `in-progress` → `review` → `done` | `blocked` (waiting on deps)

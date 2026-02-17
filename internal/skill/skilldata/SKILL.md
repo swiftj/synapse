@@ -61,19 +61,43 @@ If MCP tools are available, prefer them. Otherwise fall back to CLI commands
 ## Core Workflow
 
 ### Session Start
-1. Call `get_context_window` to see recent activity
-2. Call `list_breadcrumbs` with prefix `session.` for prior context
-3. Call `get_next_task` to find what to work on
-4. Call `claim_task` with your agent ID before starting work
+1. `get_context_window` — recent activity
+2. `list_breadcrumbs` with prefix `session.` — prior session state
+3. `get_next_task` — highest priority unblocked work
+4. `claim_task` — lock it before starting
 
 ### During Work
-- Use `spawn_task` when you discover new issues while working
-- Use `add_note` to record decisions, findings, or context on tasks
-- Use `set_breadcrumb` to store cross-session knowledge (e.g., `auth.method = JWT`)
+- `claim_task` before touching code, `complete_task` the moment you finish
+- `spawn_task` immediately when discovering new issues
+- `add_note` to record progress milestones and decisions
+- `set_breadcrumb` for cross-session knowledge (e.g., `arch.auth = JWT`)
 
 ### Session End
-- Call `complete_task` or `complete_task_as` for finished work
-- Set breadcrumbs for anything the next session needs to know
+- `complete_task_as` for finished work
+- `set_breadcrumb` for `session.current_task`, `session.progress`, `session.next_step`
+
+## Status Discipline
+
+**Synapse is the single source of truth for progress.** Any agent or human
+should be able to query `list_tasks` and `list_breadcrumbs` at any time and
+get an accurate picture of what's done, what's in flight, and what remains —
+without scanning code.
+
+**Rules:**
+1. **Update immediately, not in batches.** Claim before starting, mark done the
+   moment you finish, set `blocked` the instant you discover a blocker. Never
+   defer status updates.
+2. **Break plans into tasks upfront.** When given a multi-step plan, create a
+   Synapse task for each step *before* starting work. This makes the full scope
+   visible and queryable from the start.
+3. **Add progress notes on long-running tasks.** Use `add_note` so the next
+   session understands where things stand (e.g., "API endpoints done, starting
+   tests") without re-reading code.
+4. **Record discoveries immediately.** Use `spawn_task` the moment you find new
+   work. Don't wait until the current task is done.
+5. **Breadcrumb session state at pause points.** Set `session.current_task`,
+   `session.progress`, and `session.next_step` so a new session can resume
+   without re-analyzing the codebase.
 
 ## Task Creation Guidelines
 

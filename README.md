@@ -13,6 +13,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/CGO-FREE-success?style=flat-square" alt="CGO Free">
   <img src="https://img.shields.io/badge/MCP-COMPATIBLE-8A2BE2?style=flat-square" alt="MCP Compatible">
+  <img src="https://img.shields.io/badge/Agentic_Skills-5_AGENTS-ff6b6b?style=flat-square" alt="Agentic Skills">
   <img src="https://img.shields.io/badge/Claude_Code-INTEGRATED-orange?style=flat-square" alt="Claude Code">
 </p>
 
@@ -32,6 +33,7 @@ Synapse is a lightweight, local-first, Git-backed issue tracker designed to serv
 - **Claim Locking**: Multi-agent coordination with automatic timeout release
 - **Agent Identity**: Track which agent claimed and completed each task
 - **Rich Metadata**: Notes, labels, priority, and discovery tracking
+- **Agentic Skills**: One-command skill install for Claude Code, Gemini CLI, Codex, Antigravity, OpenCode
 
 ## Installation
 
@@ -86,6 +88,11 @@ echo "Use 'synapse' for task tracking" >> CLAUDE.md
 | `claim <id>` | Mark task as in-progress |
 | `done <id>` | Mark task as done |
 | `all-done` | Mark all tasks as done (cleanup/reset command) |
+| `skill install <agent>` | Install agentic skill for an agent (`--level user\|project`) |
+| `skill uninstall <agent>` | Remove skill for an agent (`--level user\|project`) |
+| `skill list` | Show installation status for all agents |
+| `skill update [agent]` | Update installed skill(s) to current version |
+| `skill show` | Print the embedded SKILL.md content |
 | `serve` | Start MCP server (JSON-RPC over stdio) |
 | `view` | Start visualization server (`--port N`, default 8080) |
 
@@ -225,6 +232,8 @@ cmd/synapse/          # CLI entry point
 internal/
   storage/            # JSONL + SQLite persistence
   mcp/                # MCP JSON-RPC server
+  skill/              # Agentic skill install/uninstall
+    skilldata/        # Embedded SKILL.md and references
   view/               # Web visualization server
 pkg/types/            # Core Synapse struct and status types
 ```
@@ -354,6 +363,61 @@ Use breadcrumbs to persist important context:
 ```
 
 </details>
+
+## Agentic Skills
+
+Synapse supports the [Agentic Skills](https://agentskills.io) specification, a lightweight open format for teaching AI agents how to use tools. A single `skill install` command gives any supported agent full knowledge of Synapse's capabilities — no manual CLAUDE.md or AGENTS.md editing required.
+
+### Supported Agents
+
+| Agent | Format | Skill Path |
+|-------|--------|------------|
+| Claude Code | `SKILL.md` + references | `~/.claude/skills/synapse/` or `.claude/skills/synapse/` |
+| Gemini CLI | `SKILL.md` + references | `~/.gemini/skills/synapse/` or `.gemini/skills/synapse/` |
+| Codex | `AGENTS.md` section | `~/.codex/AGENTS.md` or `AGENTS.md` |
+| Antigravity | `SKILL.md` + references | `~/.gemini/antigravity/skills/synapse/` or `.agent/skills/synapse/` |
+| OpenCode | `SKILL.md` + references | `~/.config/opencode/skills/synapse/` or `.opencode/skills/synapse/` |
+
+### Install a Skill
+
+```bash
+# Install for Claude Code (project-level, default)
+synapse skill install claude-code
+
+# Install globally (user-level)
+synapse skill install claude-code --level user
+
+# Install for another agent
+synapse skill install gemini-cli --level user
+```
+
+### Manage Skills
+
+```bash
+# Check installation status
+synapse skill list
+
+# Update all installed skills after upgrading synapse
+synapse skill update
+
+# Update a specific agent
+synapse skill update claude-code --level user
+
+# Remove a skill
+synapse skill uninstall claude-code --level user
+
+# Preview what gets installed
+synapse skill show
+```
+
+### What Gets Installed
+
+**SKILL.md agents** (Claude Code, Gemini CLI, Antigravity, OpenCode) receive:
+- `SKILL.md` — Tool quick-reference, workflows, status values, breadcrumb patterns, error recovery
+- `references/workflows.md` — Multi-session patterns, parallel agent coordination, dependency graph strategies
+- `references/tool-reference.md` — Complete MCP tool documentation with all parameters and examples
+
+**AGENTS.md agents** (Codex) receive a marker-delimited section appended to the existing `AGENTS.md` file. Existing content is preserved; reinstalling replaces only the Synapse section.
 
 ## Development
 
