@@ -11,7 +11,7 @@ import (
 )
 
 // SkillName is the directory name used for skill installations.
-const SkillName = "synapse-skill"
+const SkillName = "synapse"
 
 // Format describes how a skill is delivered to an agent.
 type Format string

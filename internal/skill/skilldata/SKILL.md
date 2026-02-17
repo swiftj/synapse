@@ -1,5 +1,5 @@
 ---
-name: synapse-skill
+name: synapse
 description: >-
   Persistent task tracking, breadcrumb memory, and multi-agent coordination
   for AI coding agents. Use when managing work across sessions, tracking bugs
