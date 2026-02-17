@@ -66,13 +66,54 @@
             padding: 30px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            overflow-x: auto;
+            position: relative;
         }
 
-        #mermaid-diagram {
-            display: flex;
-            justify-content: center;
+        #diagram-viewport {
+            overflow: hidden;
+            cursor: grab;
             min-height: 400px;
+            position: relative;
+        }
+
+        #diagram-viewport:active { cursor: grabbing; }
+
+        #mermaid-diagram {
+            transform-origin: 0 0;
+            will-change: transform;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 10;
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            background: rgba(255,255,255,0.9);
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 13px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .zoom-controls button {
+            background: #f5f5f5;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 4px 10px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .zoom-controls button:hover { background: #e0e0e0; }
+
+        #zoom-level {
+            min-width: 45px;
+            text-align: center;
+            font-family: monospace;
         }
 
         .status {
@@ -154,7 +195,16 @@
     </header>
 
     <div class="viz-container">
-        <div id="mermaid-diagram" class="loading">Loading graph...</div>
+        <div class="zoom-controls">
+            <button onclick="zoomIn()" title="Zoom in">+</button>
+            <button onclick="zoomOut()" title="Zoom out">&minus;</button>
+            <span id="zoom-level">100%</span>
+            <button onclick="fitToView()" title="Fit to view">Fit</button>
+            <button onclick="resetView()" title="Reset to 100%">1:1</button>
+        </div>
+        <div id="diagram-viewport">
+            <div id="mermaid-diagram" class="loading">Loading graph...</div>
+        </div>
     </div>
 
     <footer>
@@ -171,6 +221,137 @@
             }
         });
 
+        // Zoom & pan state — persists across auto-refresh cycles
+        const VIEW = { scale: 1, x: 0, y: 0, dragging: false, startX: 0, startY: 0 };
+        let firstRender = true;
+
+        const viewport = document.getElementById('diagram-viewport');
+        const diagram = document.getElementById('mermaid-diagram');
+        const zoomDisplay = document.getElementById('zoom-level');
+
+        function applyTransform() {
+            diagram.style.transform = `translate(${VIEW.x}px, ${VIEW.y}px) scale(${VIEW.scale})`;
+            zoomDisplay.textContent = Math.round(VIEW.scale * 100) + '%';
+        }
+
+        function zoomIn() {
+            VIEW.scale = Math.min(5, VIEW.scale * 1.2);
+            applyTransform();
+        }
+
+        function zoomOut() {
+            VIEW.scale = Math.max(0.1, VIEW.scale / 1.2);
+            applyTransform();
+        }
+
+        function resetView() {
+            VIEW.scale = 1;
+            VIEW.x = 0;
+            VIEW.y = 0;
+            applyTransform();
+        }
+
+        function fitToView() {
+            const svg = diagram.querySelector('svg');
+            if (!svg) return;
+            const vp = viewport.getBoundingClientRect();
+            const sw = parseFloat(svg.getAttribute('width')) || svg.viewBox?.baseVal?.width || svg.getBoundingClientRect().width;
+            const sh = parseFloat(svg.getAttribute('height')) || svg.viewBox?.baseVal?.height || svg.getBoundingClientRect().height;
+            const scaleX = vp.width / sw;
+            const scaleY = vp.height / sh;
+            VIEW.scale = Math.min(scaleX, scaleY, 1) * 0.95;
+            VIEW.x = (vp.width - sw * VIEW.scale) / 2;
+            VIEW.y = (vp.height - sh * VIEW.scale) / 2;
+            applyTransform();
+        }
+
+        // Mouse wheel zoom at cursor
+        viewport.addEventListener('wheel', function(e) {
+            e.preventDefault();
+            const rect = viewport.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const oldScale = VIEW.scale;
+            VIEW.scale = Math.min(5, Math.max(0.1, VIEW.scale * (e.deltaY < 0 ? 1.1 : 0.9)));
+            VIEW.x = mouseX - (mouseX - VIEW.x) * (VIEW.scale / oldScale);
+            VIEW.y = mouseY - (mouseY - VIEW.y) * (VIEW.scale / oldScale);
+            applyTransform();
+        }, { passive: false });
+
+        // Click-drag pan
+        viewport.addEventListener('mousedown', function(e) {
+            if (e.button !== 0) return;
+            VIEW.dragging = true;
+            VIEW.startX = e.clientX - VIEW.x;
+            VIEW.startY = e.clientY - VIEW.y;
+        });
+
+        window.addEventListener('mousemove', function(e) {
+            if (!VIEW.dragging) return;
+            VIEW.x = e.clientX - VIEW.startX;
+            VIEW.y = e.clientY - VIEW.startY;
+            applyTransform();
+        });
+
+        window.addEventListener('mouseup', function() {
+            VIEW.dragging = false;
+        });
+
+        // Touch support — one-finger pan, two-finger pinch zoom
+        let lastTouchDist = 0;
+        let lastTouchX = 0;
+        let lastTouchY = 0;
+
+        viewport.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 1) {
+                VIEW.dragging = true;
+                lastTouchX = e.touches[0].clientX;
+                lastTouchY = e.touches[0].clientY;
+            } else if (e.touches.length === 2) {
+                VIEW.dragging = false;
+                lastTouchDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+            }
+        }, { passive: true });
+
+        viewport.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+            if (e.touches.length === 1 && VIEW.dragging) {
+                const dx = e.touches[0].clientX - lastTouchX;
+                const dy = e.touches[0].clientY - lastTouchY;
+                VIEW.x += dx;
+                VIEW.y += dy;
+                lastTouchX = e.touches[0].clientX;
+                lastTouchY = e.touches[0].clientY;
+                applyTransform();
+            } else if (e.touches.length === 2) {
+                const dist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                if (lastTouchDist > 0) {
+                    const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    const rect = viewport.getBoundingClientRect();
+                    const px = midX - rect.left;
+                    const py = midY - rect.top;
+                    const oldScale = VIEW.scale;
+                    VIEW.scale = Math.min(5, Math.max(0.1, VIEW.scale * (dist / lastTouchDist)));
+                    VIEW.x = px - (px - VIEW.x) * (VIEW.scale / oldScale);
+                    VIEW.y = py - (py - VIEW.y) * (VIEW.scale / oldScale);
+                    applyTransform();
+                }
+                lastTouchDist = dist;
+            }
+        }, { passive: false });
+
+        viewport.addEventListener('touchend', function() {
+            VIEW.dragging = false;
+            lastTouchDist = 0;
+        }, { passive: true });
+
         async function fetchAndRender() {
             try {
                 const response = await fetch('/api/synapses');
@@ -185,8 +366,14 @@
                 container.innerHTML = '';
                 container.classList.remove('loading');
 
-                const { svg } = await mermaid.render('graph', mermaidCode);
+                const { svg } = await mermaid.render('graph-' + Date.now(), mermaidCode);
                 container.innerHTML = svg;
+                applyTransform();
+
+                if (firstRender) {
+                    firstRender = false;
+                    fitToView();
+                }
             } catch (error) {
                 console.error('Error rendering graph:', error);
                 document.getElementById('mermaid-diagram').innerHTML =
