@@ -4,7 +4,7 @@
 
 <!-- Badges -->
 <p align="center">
-  <img src="https://img.shields.io/badge/VERSION-1.0.5-blue?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/VERSION-1.0.6-blue?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go Version">
   <img src="https://img.shields.io/badge/-macOS-000000?style=flat-square&logo=apple&logoColor=white" alt="macOS">
   <img src="https://img.shields.io/badge/-Linux-FCC624?style=flat-square&logo=linux&logoColor=black" alt="Linux">
@@ -207,7 +207,6 @@ Synapse stores data in `.synapse/`:
 |------|-------------|-----|
 | `memory.jsonl` | Task data (source of truth) | ✅ Track |
 | `breadcrumbs.jsonl` | Key-value context storage | ✅ Track |
-| `index.db` | SQLite cache (auto-rebuilt) | ❌ Ignore |
 
 **Task format example:**
 ```jsonl
@@ -223,20 +222,6 @@ Synapse stores data in `.synapse/`:
 
 **Best Practices:**
 - Commit `.synapse/memory.jsonl` and `.synapse/breadcrumbs.jsonl` to Git
-- Add `.synapse/index.db` to `.gitignore` (SQLite cache, auto-rebuilt)
-
-## Architecture
-
-```
-cmd/synapse/          # CLI entry point
-internal/
-  storage/            # JSONL + SQLite persistence
-  mcp/                # MCP JSON-RPC server
-  skill/              # Agentic skill install/uninstall
-    skilldata/        # Embedded SKILL.md and references
-  view/               # Web visualization server
-pkg/types/            # Core Synapse struct and status types
-```
 
 ## Multi-Agent Coordination
 
@@ -432,24 +417,8 @@ go test ./...
 go build -o synapse ./cmd/synapse/
 
 # Run examples
-go run ./examples/cache_demo/
 go run ./examples/viz_server/
 ```
-
-### Version Management
-
-This project uses Git hooks for automatic SemVer versioning:
-
-| Commit Type | Action | Example |
-|-------------|--------|---------|
-| Normal commit with `.go` files | Bump patch | `0.3.2` → `0.3.3` |
-| `[minor]` in commit message | Bump minor | `0.3.2` → `0.4.0` |
-| `[major]` in commit message | Bump major | `0.3.2` → `1.0.0` |
-| `[skip-version]` in commit message | No change | `0.3.2` → `0.3.2` |
-
-The hooks automatically update:
-- `cmd/synapse/main.go` (version constant)
-- `README.md` (version badge)
 
 ## License
 

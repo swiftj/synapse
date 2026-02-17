@@ -462,7 +462,6 @@ list_breadcrumbs({
 
 ### Phase 4: Enhancements
 
-- [ ] SQLite caching for fast queries (like task index)
 - [ ] Custom merge driver for Git conflicts
 - [ ] Breadcrumb validation (namespace constraints)
 - [ ] Import/export functionality
@@ -485,16 +484,8 @@ list_breadcrumbs({
 - Write-through cache on updates
 
 **Large projects (>1000 breadcrumbs)**:
-- SQLite index (like task index)
+- In-memory map with prefix indexing
 - Rebuild from JSONL on startup
-- Fast prefix queries with B-tree index
-
-### Cache Invalidation
-
-If implementing SQLite caching:
-- `.synapse/breadcrumbs.db` (ignored in Git)
-- Rebuild from JSONL if file modified timestamp changed
-- Similar pattern to existing task index
 
 ## Security Considerations
 

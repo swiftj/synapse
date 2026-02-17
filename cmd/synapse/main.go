@@ -18,7 +18,7 @@ import (
 	"github.com/swiftj/synapse/pkg/types"
 )
 
-const version = "1.0.5"
+const version = "1.0.6"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -166,11 +166,6 @@ func cmdInit(args []string) {
 	}
 
 	if result.GitRepoDetected {
-		if result.GitignoreUpdated {
-			fmt.Println("  ✓ Added .synapse/index.db to .gitignore")
-		} else {
-			fmt.Println("  - .synapse/index.db already in .gitignore")
-		}
 		if result.MemoryStaged {
 			fmt.Println("  ✓ Staged .synapse/memory.jsonl for commit")
 		} else if stageMemory {

@@ -40,11 +40,10 @@ func NewJSONLStore(dir string) *JSONLStore {
 
 // InitResult contains the results of an Init operation.
 type InitResult struct {
-	DirCreated       bool
-	MemoryCreated    bool
-	GitRepoDetected  bool
-	GitignoreUpdated bool
-	MemoryStaged     bool
+	DirCreated      bool
+	MemoryCreated   bool
+	GitRepoDetected bool
+	MemoryStaged    bool
 }
 
 // Init creates the storage directory if it doesn't exist.
@@ -85,23 +84,13 @@ func (s *JSONLStore) InitWithOptions(stageMemory bool) (*InitResult, error) {
 	if git != nil {
 		result.GitRepoDetected = true
 
-		// Always add index.db to .gitignore (safe, idempotent)
-		// Need absolute paths for filepath.Rel to work correctly
-		// Also resolve symlinks for consistent comparison (e.g., /tmp -> /private/tmp on macOS)
-		absDir, err := filepath.Abs(s.dir)
-		if err == nil {
-			if resolved, err := filepath.EvalSymlinks(absDir); err == nil {
-				absDir = resolved
-			}
-			indexDBPath := filepath.Join(absDir, "index.db")
-			relPath, err := filepath.Rel(git.RepoRoot(), indexDBPath)
+		// Optionally stage memory.jsonl
+		if stageMemory {
+			absDir, err := filepath.Abs(s.dir)
 			if err == nil {
-				added, _ := git.AddToGitignore(relPath)
-				result.GitignoreUpdated = added
-			}
-
-			// Optionally stage memory.jsonl
-			if stageMemory {
+				if resolved, err := filepath.EvalSymlinks(absDir); err == nil {
+					absDir = resolved
+				}
 				absMemPath := filepath.Join(absDir, MemoryFile)
 				memRelPath, err := filepath.Rel(git.RepoRoot(), absMemPath)
 				if err == nil {

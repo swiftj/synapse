@@ -18,9 +18,8 @@
 | Component | Technology | Rationale |
 |-----------|------------|-----------|
 | Language | Go 1.23+ | Performance, static binaries |
-| Database | `modernc.org/sqlite` | Pure Go SQLite, no CGO dependency |
 | Protocol | MCP via JSON-RPC | Native Claude Code integration |
-| Storage | JSONL in `.synapse/memory.jsonl` | Git-friendly, merge-safe |
+| Storage | JSONL in `.synapse/memory.jsonl` | Git-friendly, merge-safe, in-memory map |
 | Visualization | Mermaid.js (embedded) | Live DAG rendering |
 
 ## Architecture
@@ -29,12 +28,12 @@
 project_root/
 ├── .synapse/
 │   ├── memory.jsonl      # Source of Truth (Git tracked)
-│   ├── index.db          # SQLite Cache (Git ignored)
+│   ├── breadcrumbs.jsonl # Key-value context (Git tracked)
 │   └── config.json       # Agent roles and custom states
 ├── cmd/
 │   └── synapse/          # CLI entry point
 ├── internal/
-│   ├── storage/          # JSONL + SQLite operations
+│   ├── storage/          # JSONL persistence and in-memory store
 │   ├── engine/           # Next-action topological sort
 │   ├── mcp/              # MCP server implementation
 │   └── view/             # Visualization server
@@ -71,7 +70,6 @@ type Synapse struct {
 
 ### Performance Requirements
 - All operations must complete in <50ms
-- SQLite cache must be rebuildable from JSONL
 - Append-only writes preferred for JSONL
 
 ### Testing
@@ -125,16 +123,6 @@ The "Next-Action" engine must:
 - Deterministic sorting by ID for consistent diffs
 - Include custom merge driver in `.gitattributes`
 
-## Dependencies to Add
-
-```
-go get modernc.org/sqlite
-```
-
-Do NOT use:
-- `mattn/go-sqlite3` (requires CGO)
-- Any C-binding SQLite drivers
-
 ## Workflow for AI Agents
 
 When working on this codebase:
@@ -155,6 +143,6 @@ When working on this codebase:
 
 ## File Patterns
 
-- `.synapse/index.db` - Add to `.gitignore`
 - `.synapse/memory.jsonl` - Track in Git
+- `.synapse/breadcrumbs.jsonl` - Track in Git
 - `.synapse/config.json` - Track in Git

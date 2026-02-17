@@ -16,7 +16,7 @@ metadata:
 # Synapse Skill
 
 Synapse is a local-first, Git-backed task tracker and breadcrumb memory system.
-Data lives in `.synapse/memory.jsonl` (Git-tracked) with a SQLite cache.
+Data lives in `.synapse/memory.jsonl` (Git-tracked) with an in-memory store.
 
 ## Tool Detection
 
@@ -182,7 +182,7 @@ syn bc list prefix        # List breadcrumbs
 ## Data Storage
 
 - **Source of truth**: `.synapse/memory.jsonl` (Git-tracked, one JSON per line)
-- **Cache**: `.synapse/index.db` (SQLite, Git-ignored, auto-rebuilt)
+- **Breadcrumbs**: `.synapse/breadcrumbs.jsonl` (Git-tracked, key-value pairs)
 - **Config**: `.synapse/config.json` (agent roles, custom states)
 
 For detailed workflow patterns, see `references/workflows.md`.

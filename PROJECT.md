@@ -46,9 +46,9 @@ While Beads is a general-purpose tool, **Synapse** is purpose-built for **Claude
 
 ### Non-Functional Requirements
 
-* **Zero-Dependency Binary:** Written in **Go** using a *pure-Go* SQLite driver (removes Beads' dependency on CGO/glibc, making it work on Alpine Linux, old distros, and Windows without hassle).
+* **Zero-Dependency Binary:** Written in **Go** with no CGO dependencies (runs on Alpine Linux, old distros, and Windows without hassle).
 * **Speed:** Operations must complete in <50ms.
-* **Context Safety:** The database must be rebuildable entirely from the JSONL file if the SQLite cache is corrupted.
+* **Context Safety:** All data is stored in JSONL as the single source of truth.
 
 ---
 
@@ -57,7 +57,7 @@ While Beads is a general-purpose tool, **Synapse** is purpose-built for **Claude
 ### Tech Stack
 
 * **Language:** Go (Golang) 1.23+
-* **Database:** `modernc.org/sqlite` (Pure Go port of SQLite - **Critical improvement** for portability).
+* **Storage:** JSONL files with in-memory map for fast queries (no external database dependencies).
 * **Protocol:** Model Context Protocol (MCP) via JSON-RPC.
 * **Visualization:** HTML template with **Mermaid.js** (embedded in the binary).
 
@@ -67,7 +67,7 @@ While Beads is a general-purpose tool, **Synapse** is purpose-built for **Claude
 project_root/
 ├── .synapse/
 │   ├── memory.jsonl      # The Source of Truth (Git tracked)
-│   ├── index.db          # SQLite Cache (Git ignored)
+│   ├── breadcrumbs.jsonl # Key-value context (Git tracked)
 │   └── config.json       # Agent roles and custom states
 ├── CLAUDE.md             # Auto-managed instructions
 
@@ -95,7 +95,7 @@ type Synapse struct {
 
 
 3. **Implement Storage:**
-* Write the `Load()` function: Read `memory.jsonl` line-by-line into the SQLite cache.
+* Write the `Load()` function: Read `memory.jsonl` line-by-line into an in-memory map.
 * Write the `Save()` function: Dump new issues to `memory.jsonl` as append-only or rewrite (ensure deterministic sorting for Git diffs).
 
 
@@ -136,7 +136,7 @@ Here are specific ways Synapse will outperform the original Beads implementation
 ### 1. Pure Portability (The "It Just Works" Factor)
 
 * **Beads Limitation:** Uses CGO (links against C libraries). This often breaks on different Linux versions (glibc errors) or requires complex Windows setups.
-* **Synapse Solution:** Use a **transpiled SQLite (pure Go)**. The resulting binary is static. You can drop it into a container, a remote SSH session, or a Windows laptop, and it runs immediately.
+* **Synapse Solution:** Pure Go with zero CGO dependencies. The resulting binary is static. You can drop it into a container, a remote SSH session, or a Windows laptop, and it runs immediately.
 
 ### 2. The "Vibe" Visualizer
 
