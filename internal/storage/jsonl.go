@@ -40,10 +40,10 @@ func NewJSONLStore(dir string) *JSONLStore {
 
 // InitResult contains the results of an Init operation.
 type InitResult struct {
-	DirCreated      bool
-	MemoryCreated   bool
-	GitRepoDetected bool
-	MemoryStaged    bool
+	DirCreated      bool `json:"dir_created"`
+	MemoryCreated   bool `json:"memory_created"`
+	GitRepoDetected bool `json:"git_repo_detected"`
+	MemoryStaged    bool `json:"memory_staged"`
 }
 
 // Init creates the storage directory if it doesn't exist.

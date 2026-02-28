@@ -4,7 +4,7 @@
 
 <!-- Badges -->
 <p align="center">
-  <img src="https://img.shields.io/badge/VERSION-1.0.6-blue?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/VERSION-1.0.7-blue?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go Version">
   <img src="https://img.shields.io/badge/-macOS-000000?style=flat-square&logo=apple&logoColor=white" alt="macOS">
   <img src="https://img.shields.io/badge/-Linux-FCC624?style=flat-square&logo=linux&logoColor=black" alt="Linux">
@@ -26,6 +26,7 @@ Synapse is a lightweight, local-first, Git-backed issue tracker designed to serv
 - **Git-Friendly Storage**: JSONL format for clean diffs and easy merging
 - **Dependency Tracking**: Block tasks on other tasks, automatic ready-state detection
 - **Sub-Agent Support**: Assign tasks to roles (`@qa`, `@coder`, `@architect`)
+- **Global `--json` Flag**: Structured JSON output from every command for agent consumption
 - **MCP Integration**: JSON-RPC 2.0 server for Claude Code and other AI tools
 - **DAG Visualization**: Web-based Mermaid.js task graph with auto-refresh
 - **Pure Go**: No CGO dependencies, single binary deployment
@@ -76,13 +77,24 @@ echo "Use 'synapse' for task tracking" >> CLAUDE.md
 
 ## Commands
 
+### Global Flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output structured JSON from any command. Can appear anywhere in the argument list. |
+
+```bash
+synapse --json ready           # flag before command
+synapse list --json --status open  # flag after command (backward compatible)
+```
+
 ### Task Management
 
 | Command | Description |
 |---------|-------------|
 | `init` | Initialize `.synapse` directory in current project |
 | `add <title>` | Create a new task with optional flags (see below) |
-| `list` | List all tasks (filter with `--status`, `--label`, output with `--json`) |
+| `list` | List all tasks (filter with `--status`, `--label`) |
 | `ready` | List tasks ready to work on (unblocked, open status) |
 | `get <id>` | Get details of a specific task |
 | `claim <id>` | Mark task as in-progress |
@@ -181,6 +193,70 @@ Synapse includes a Model Context Protocol server for AI agent integration:
 - `get_breadcrumb` - Retrieve a breadcrumb by key
 - `list_breadcrumbs` - List breadcrumbs with optional prefix filter
 - `delete_breadcrumb` - Remove a breadcrumb
+
+## CLI Mode for Agents
+
+The `--json` flag turns Synapse into a fully machine-readable CLI that agents like Claude Code can drive directly via shell commands — no MCP server required. This is the simplest integration path: add a few lines to `CLAUDE.md` and agents can use Synapse immediately.
+
+### When to use CLI mode vs MCP
+
+| | CLI mode (`--json`) | MCP server (`serve`) |
+|---|---|---|
+| **Setup** | Zero config — just add instructions to CLAUDE.md | Requires MCP server config in `settings.json` |
+| **Agent support** | Any agent that can run shell commands | Agents with MCP client support |
+| **Latency** | Process spawn per call (~5ms) | Persistent connection, slightly lower per-call |
+| **Best for** | Quick setup, single-agent workflows, any agent | Multi-agent coordination, claim locking, context windows |
+
+### Setting up CLI mode
+
+Add the following to your project's `CLAUDE.md` (or equivalent agent instructions file):
+
+```markdown
+## Task Tracking
+
+Use synapse CLI with --json for all task operations. Parse the JSON output to confirm results.
+
+Workflow:
+- Start of session: `synapse --json ready` to see available work
+- Starting a task: `synapse --json claim <id>`
+- Finishing a task: `synapse --json done <id>`
+- Discovered a bug: `synapse --json add "Bug description" --blocks <id>`
+- Store context: `synapse --json bc set <key> <value>`
+- Recall context: `synapse --json bc get <key>`
+```
+
+### JSON output reference
+
+Every command returns structured JSON when `--json` is passed:
+
+```bash
+# Task objects
+synapse --json add "Fix login bug"     # → full Synapse object
+synapse --json get 1                   # → full Synapse object
+synapse --json claim 1                 # → Synapse object (status: in-progress)
+synapse --json done 1                  # → Synapse object (status: done)
+synapse --json delete 1               # → Synapse object (pre-deletion snapshot)
+
+# Task lists
+synapse --json list                    # → array of Synapse objects
+synapse --json list --status open      # → filtered array
+synapse --json ready                   # → array of ready tasks
+
+# Bulk operations
+synapse --json all-done                # → {"count": N}
+synapse --json delete --all            # → {"deleted": N}
+synapse --json delete --done           # → {"deleted": N}
+
+# Breadcrumbs
+synapse --json bc set key value        # → Breadcrumb object
+synapse --json bc get key              # → Breadcrumb object
+synapse --json bc list                 # → array of Breadcrumb objects
+synapse --json bc delete key           # → {"deleted": "key"}
+
+# Meta
+synapse --json version                 # → {"version": "1.0.6"}
+synapse --json init                    # → InitResult object
+```
 
 ## Visualization
 

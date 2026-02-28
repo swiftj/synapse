@@ -18,9 +18,34 @@ import (
 	"github.com/swiftj/synapse/pkg/types"
 )
 
-const version = "1.0.6"
+const version = "1.0.7"
+
+var jsonOutput bool
+
+// jsonOut writes v as indented JSON to stdout.
+func jsonOut(v any) {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	enc.Encode(v)
+}
+
+// extractGlobalFlags scans os.Args for --json, sets jsonOutput, and strips
+// the flag so per-command parsers don't see it.
+func extractGlobalFlags() {
+	filtered := os.Args[:0]
+	for _, arg := range os.Args {
+		if arg == "--json" {
+			jsonOutput = true
+		} else {
+			filtered = append(filtered, arg)
+		}
+	}
+	os.Args = filtered
+}
 
 func main() {
+	extractGlobalFlags()
+
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
@@ -57,6 +82,10 @@ func main() {
 	case "view":
 		cmdView(args)
 	case "version", "-v", "--version":
+		if jsonOutput {
+			jsonOut(map[string]string{"version": version})
+			return
+		}
 		fmt.Printf("synapse v%s\n", version)
 	case "help", "-h", "--help":
 		printUsage()
@@ -71,7 +100,10 @@ func printUsage() {
 	fmt.Println(`Synapse - The shared nervous system for Vibe Coders and their Agents.
 
 Usage:
-  synapse <command> [arguments]
+  synapse [--json] <command> [arguments]
+
+Global Flags:
+  --json            Output structured JSON (works with any command)
 
 Commands:
   init              Initialize .synapse directory in current project
@@ -85,11 +117,8 @@ Commands:
       --limit N     Limit output to N tasks (default 20, 0 for unlimited)
       --summary     Condensed output (default)
       --full        Show all fields for each task
-      --json        Output as JSON
   ready             List ready (unblocked, open) tasks
-      --json        Output as JSON for agents
   get <id>          Get details of a specific synapse
-      --json        Output as JSON
   claim <id>        Mark synapse as in-progress
   done <id>         Mark synapse as done
   all-done          Mark all tasks as done (cleanup command)
@@ -101,7 +130,6 @@ Commands:
           --task-id N     Link to task ID
       get <key>           Get a breadcrumb value
       list [prefix]       List breadcrumbs (optionally filter by prefix)
-          --json          Output as JSON
       delete <key>        Delete a breadcrumb
   skill             Manage agentic skill installations
       install <agent>   Install skill for an agent
@@ -120,10 +148,10 @@ Commands:
 
 Examples:
   synapse init
-  synapse add "Fix login bug" --blocks 4 --parent 2
-  synapse ready --json
+  synapse --json add "Fix login bug" --blocks 4 --parent 2
+  synapse --json ready
   synapse claim 5
-  synapse done 5`)
+  synapse --json done 5`)
 }
 
 func getStore() *storage.JSONLStore {
@@ -156,6 +184,11 @@ func cmdInit(args []string) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
+	}
+
+	if jsonOutput {
+		jsonOut(result)
+		return
 	}
 
 	fmt.Println("Initialized .synapse directory")
@@ -247,6 +280,11 @@ func cmdAdd(args []string) {
 
 	saveStore(store)
 
+	if jsonOutput {
+		jsonOut(syn)
+		return
+	}
+
 	fmt.Printf("Created synapse #%d: %s\n", syn.ID, syn.Title)
 	if len(blocks) > 0 {
 		fmt.Printf("  Blocked by: %v\n", blocks)
@@ -261,7 +299,6 @@ func cmdAdd(args []string) {
 
 func cmdList(args []string) {
 	var statusFilter string
-	var asJSON bool
 	var fullOutput bool
 	limit := 20 // default limit
 
@@ -272,8 +309,6 @@ func cmdList(args []string) {
 				i++
 				statusFilter = args[i]
 			}
-		case "--json":
-			asJSON = true
 		case "--limit":
 			if i+1 < len(args) {
 				i++
@@ -313,10 +348,8 @@ func cmdList(args []string) {
 		synapses = synapses[:limit]
 	}
 
-	if asJSON {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		enc.Encode(synapses)
+	if jsonOutput {
+		jsonOut(synapses)
 		return
 	}
 
@@ -342,20 +375,11 @@ func cmdList(args []string) {
 }
 
 func cmdReady(args []string) {
-	asJSON := false
-	for _, arg := range args {
-		if arg == "--json" {
-			asJSON = true
-		}
-	}
-
 	store := getStore()
 	ready := store.Ready()
 
-	if asJSON {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		enc.Encode(ready)
+	if jsonOutput {
+		jsonOut(ready)
 		return
 	}
 
@@ -382,13 +406,6 @@ func cmdGet(args []string) {
 		os.Exit(1)
 	}
 
-	asJSON := false
-	for _, arg := range args[1:] {
-		if arg == "--json" {
-			asJSON = true
-		}
-	}
-
 	store := getStore()
 	syn, err := store.Get(id)
 	if err != nil {
@@ -396,10 +413,8 @@ func cmdGet(args []string) {
 		os.Exit(1)
 	}
 
-	if asJSON {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		enc.Encode(syn)
+	if jsonOutput {
+		jsonOut(syn)
 		return
 	}
 
@@ -428,6 +443,11 @@ func cmdClaim(args []string) {
 	syn.MarkInProgress()
 	saveStore(store)
 
+	if jsonOutput {
+		jsonOut(syn)
+		return
+	}
+
 	fmt.Printf("Claimed synapse #%d: %s\n", syn.ID, syn.Title)
 	fmt.Printf("Status: %s\n", syn.Status)
 }
@@ -453,6 +473,11 @@ func cmdDone(args []string) {
 
 	syn.MarkDone()
 	saveStore(store)
+
+	if jsonOutput {
+		jsonOut(syn)
+		return
+	}
 
 	fmt.Printf("Completed synapse #%d: %s\n", syn.ID, syn.Title)
 }
@@ -519,11 +544,21 @@ func cmdDoneAll() {
 	}
 
 	if count == 0 {
+		if jsonOutput {
+			jsonOut(map[string]int{"count": 0})
+			return
+		}
 		fmt.Println("No tasks to mark as done")
 		return
 	}
 
 	saveStore(store)
+
+	if jsonOutput {
+		jsonOut(map[string]int{"count": count})
+		return
+	}
+
 	fmt.Printf("Marked %d task(s) as done\n", count)
 }
 
@@ -535,6 +570,10 @@ func cmdDelete(args []string) {
 		all := store.All()
 		count := len(all)
 		if count == 0 {
+			if jsonOutput {
+				jsonOut(map[string]int{"deleted": 0})
+				return
+			}
 			fmt.Println("No tasks to delete")
 			return
 		}
@@ -544,6 +583,11 @@ func cmdDelete(args []string) {
 			os.Exit(1)
 		}
 		saveStore(store)
+
+		if jsonOutput {
+			jsonOut(map[string]int{"deleted": count})
+			return
+		}
 		fmt.Printf("Deleted all %d task(s)\n", count)
 		return
 	}
@@ -557,11 +601,20 @@ func cmdDelete(args []string) {
 		}
 
 		if count == 0 {
+			if jsonOutput {
+				jsonOut(map[string]int{"deleted": 0})
+				return
+			}
 			fmt.Println("No completed tasks to delete")
 			return
 		}
 
 		saveStore(store)
+
+		if jsonOutput {
+			jsonOut(map[string]int{"deleted": count})
+			return
+		}
 		fmt.Printf("Deleted %d completed task(s)\n", count)
 		return
 	}
@@ -584,14 +637,20 @@ func cmdDelete(args []string) {
 		os.Exit(1)
 	}
 
-	title := syn.Title
+	// Snapshot for JSON output before deletion
+	snapshot := *syn
 	if err := store.Delete(id); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 
 	saveStore(store)
-	fmt.Printf("Deleted synapse #%d: %s\n", id, title)
+
+	if jsonOutput {
+		jsonOut(&snapshot)
+		return
+	}
+	fmt.Printf("Deleted synapse #%d: %s\n", id, snapshot.Title)
 }
 
 func getBreadcrumbStore() *storage.BreadcrumbStore {
@@ -676,18 +735,20 @@ func cmdBreadcrumbSet(args []string) {
 	}
 
 	store := getBreadcrumbStore()
-	created, err := store.Set(key, value, taskID)
+	_, err := store.Set(key, value, taskID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 	saveBreadcrumbStore(store)
 
-	if created {
-		fmt.Printf("Created breadcrumb: %s = %s\n", key, value)
-	} else {
-		fmt.Printf("Updated breadcrumb: %s = %s\n", key, value)
+	if jsonOutput {
+		b, _ := store.Get(key)
+		jsonOut(b)
+		return
 	}
+
+	fmt.Printf("Set breadcrumb: %s = %s\n", key, value)
 	if taskID > 0 {
 		fmt.Printf("  Linked to task #%d\n", taskID)
 	}
@@ -709,19 +770,21 @@ func cmdBreadcrumbGet(args []string) {
 		os.Exit(1)
 	}
 
+	if jsonOutput {
+		jsonOut(b)
+		return
+	}
+
 	// Output just the value for easy scripting
 	fmt.Println(b.Value)
 }
 
 func cmdBreadcrumbList(args []string) {
 	var prefix string
-	var asJSON bool
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		if arg == "--json" {
-			asJSON = true
-		} else if !strings.HasPrefix(arg, "--") {
+		if !strings.HasPrefix(arg, "--") {
 			prefix = arg
 		}
 	}
@@ -729,10 +792,8 @@ func cmdBreadcrumbList(args []string) {
 	store := getBreadcrumbStore()
 	breadcrumbs := store.List(prefix)
 
-	if asJSON {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		enc.Encode(breadcrumbs)
+	if jsonOutput {
+		jsonOut(breadcrumbs)
 		return
 	}
 
@@ -775,6 +836,11 @@ func cmdBreadcrumbDelete(args []string) {
 	}
 
 	saveBreadcrumbStore(store)
+
+	if jsonOutput {
+		jsonOut(map[string]string{"deleted": key})
+		return
+	}
 	fmt.Printf("Deleted breadcrumb: %s\n", key)
 }
 
